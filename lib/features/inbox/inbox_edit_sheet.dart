@@ -10,6 +10,7 @@ import '../../core/models/document.dart';
 import '../../core/models/document_type.dart';
 import '../../core/models/storage_path.dart';
 import '../../core/models/tag.dart';
+import '../../shared/error_banner.dart';
 import '../../shared/format.dart';
 import '../../shared/widgets/metadata_dropdown.dart';
 import '../../shared/widgets/tag_picker_sheet.dart';
@@ -331,8 +332,7 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
         if (created != null) 'created': created,
       };
     } on FormatException catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(e.message)));
+      showErrorBanner(context, e.message);
       return null;
     }
   }
@@ -351,13 +351,11 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
       ref.invalidate(inboxNotifierProvider);
       if (!mounted) return;
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(accept ? 'Gespeichert und angenommen' : 'Gespeichert')));
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Speichern fehlgeschlagen: ${friendlyApiMessage(e)}')));
+      showErrorBanner(
+          context, 'Speichern fehlgeschlagen: ${friendlyApiMessage(e)}');
     }
   }
 }

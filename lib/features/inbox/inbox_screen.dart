@@ -12,6 +12,7 @@ import '../../core/api/download_file_type.dart';
 import '../../core/design_tokens.dart';
 import '../../core/models/custom_field.dart';
 import '../../core/models/document.dart';
+import '../../shared/error_banner.dart';
 import '../../shared/format.dart';
 import '../../shared/widgets/stamp_chip.dart';
 import '../../shared/widgets/tag_chip.dart';
@@ -38,8 +39,7 @@ class InboxScreen extends ConsumerWidget {
       final error = next.valueOrNull?.loadMoreError;
       if (error != null && error != prev?.valueOrNull?.loadMoreError) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text(error)));
+          showErrorBanner(context, error);
         }
       }
     });
@@ -217,59 +217,48 @@ class _CardStackState extends ConsumerState<_CardStack>
     }
   }
 
-  void _animateTo(Offset target, {VoidCallback? then}) {
+  Future<void> _animateTo(Offset target) {
     _animation = Tween(begin: _drag, end: target).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
     );
-    _controller.forward(from: 0).whenComplete(() {
+    return _controller.forward(from: 0).orCancel.then((_) {
       _animation = null;
-      then?.call();
-    });
+    }, onError: (_) => _animation = null);
   }
 
-  void _snapBack() => _animateTo(Offset.zero);
+  Future<void> _snapBack() => _animateTo(Offset.zero);
 
   Future<void> _accept(Document doc) async {
     if (_busy) return;
     setState(() => _busy = true);
     final width = MediaQuery.sizeOf(context).width;
-    _animateTo(Offset(width * 1.2, 0));
+    // Fork: let the fly-out finish before touching the offset; resetting it
+    // mid-animation left the next card stuck off-screen (and, on failure,
+    // the failed card gone with no buttons).
+    final flyOut = _animateTo(Offset(width * 1.2, 0));
 
     // Fork: accepting never applies Paperless' own guesses; the AI already
     // filled the fields, accept only removes the inbox tag.
     const suggestions = MetadataSuggestions();
     final notifier = ref.read(inboxNotifierProvider.notifier);
-    final messenger = ScaffoldMessenger.of(context);
+    // Fork: success is silent (the card flying away is feedback enough);
+    // only failures get a message, at the top.
     try {
-      final previous = await notifier.acceptSuggestions(doc, suggestions);
+      await notifier.acceptSuggestions(doc, suggestions);
+      await flyOut;
       if (!mounted) return;
       setState(() {
         _drag = Offset.zero;
         _busy = false;
       });
-      if (previous != null) {
-        messenger.showSnackBar(SnackBar(
-          content: Text('Angenommen: "${doc.title}"'),
-          // Flutter defaults an action-bearing SnackBar to persist: true
-          // (snack_bar.dart: `persist = persist ?? action != null`) — without
-          // this, the auto-dismiss timer fires but early-returns before
-          // hiding it, and never re-arms, so it stays pinned indefinitely.
-          persist: false,
-          action: SnackBarAction(
-            label: 'Rückgängig',
-            onPressed: () => notifier.undoAccept(doc.id, previous),
-          ),
-        ));
-      }
     } catch (e) {
+      await flyOut;
       if (!mounted) return;
-      setState(() {
-        _drag = Offset.zero;
-        _busy = false;
-      });
-      messenger.showSnackBar(SnackBar(
-        content: Text('Failed to file: ${friendlyApiMessage(e)}'),
-      ));
+      await _snapBack();
+      if (!mounted) return;
+      setState(() => _busy = false);
+      showErrorBanner(
+          context, 'Annehmen fehlgeschlagen: ${friendlyApiMessage(e)}');
     }
   }
 
