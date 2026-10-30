@@ -1,15 +1,20 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:pdfx/pdfx.dart';
 
 import '../../core/api/api_error_mapper.dart';
 import '../../core/api/api_providers.dart';
+import '../../core/api/download_file_type.dart';
 import '../../core/design_tokens.dart';
 import '../../core/models/custom_field.dart';
 import '../../core/models/document.dart';
 import '../../shared/format.dart';
 import '../../shared/widgets/stamp_chip.dart';
+import '../../shared/widgets/tag_chip.dart';
 import '../documents/document_detail_screen.dart' show displayCustomFieldValue;
 import '../scanner/processing/metadata_matcher.dart';
 import 'inbox_edit_sheet.dart';
@@ -277,6 +282,9 @@ class _CardStackState extends ConsumerState<_CardStack>
   }
 }
 
+/// Fork: Sam's layout. The page fills every pixel the info block doesn't need;
+/// the info block is as tall as its content (title and correspondent wrap,
+/// chips flow onto more lines) and only scrolls past 60 % of the card.
 class _InboxCard extends ConsumerWidget {
   const _InboxCard({
     required this.document,
@@ -297,7 +305,6 @@ class _InboxCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = AppTokens.of(context);
-    final api = ref.watch(paperlessApiProvider);
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -308,55 +315,33 @@ class _InboxCard extends ConsumerWidget {
           width: accepting ? 2 : 1,
         ),
       ),
-      child: InkWell(
-        onTap: onTap,
-        child: Opacity(
-          opacity: dimmed ? 0.55 : 1,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      child: Opacity(
+        opacity: dimmed ? 0.55 : 1,
+        child: LayoutBuilder(
+          builder: (context, box) => Column(
             children: [
               Expanded(
-                flex: 2,
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ColoredBox(
-                    color: tokens.paper,
-                    child: CachedNetworkImage(
-                      imageUrl: api.thumbnailUrl(document.id),
-                      httpHeaders: {'Authorization': api.authToken},
-                      fit: BoxFit.cover,
-                      alignment: Alignment.topCenter,
-                      errorWidget: (_, __, ___) => Icon(
-                        Icons.description_outlined,
-                        size: 56,
-                        color: tokens.inkSoft,
-                      ),
-                    ),
-                  ),
+                child: _PagedPreview(
+                  key: ValueKey(document.id),
+                  document: document,
+                  interactive: !dimmed,
                 ),
               ),
-              Flexible(
-                flex: 3,
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(
-                      Spacing.lg, Spacing.md, Spacing.lg, Spacing.sm),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        document.title,
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: Spacing.sm),
-                      if (!dimmed) _FieldSummary(document: document),
-                    ],
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: box.maxHeight * 0.6),
+                child: InkWell(
+                  onTap: onTap,
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(
+                        Spacing.lg, Spacing.md, Spacing.lg, Spacing.xs),
+                    child: _CardInfo(document: document),
                   ),
                 ),
               ),
               if (!dimmed)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(
-                      Spacing.sm, 0, Spacing.sm, Spacing.sm),
+                      Spacing.sm, 0, Spacing.lg, Spacing.md),
                   child: Row(
                     children: [
                       TextButton.icon(
@@ -365,13 +350,13 @@ class _InboxCard extends ConsumerWidget {
                             size: 18, color: tokens.stamp),
                         label: const Text('Bearbeiten'),
                       ),
-                      const SizedBox(width: Spacing.sm),
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: onAccept,
-                          icon: const Icon(Icons.check, size: 18),
-                          label: const Text('Annehmen'),
-                        ),
+                      const Spacer(),
+                      IconButton.filled(
+                        onPressed: onAccept,
+                        tooltip: 'Annehmen',
+                        iconSize: 28,
+                        padding: const EdgeInsets.all(Spacing.md),
+                        icon: const Icon(Icons.check),
                       ),
                     ],
                   ),
@@ -384,82 +369,240 @@ class _InboxCard extends ConsumerWidget {
   }
 }
 
-/// Fork: every field the AI filled in, plus the sentences it took deadline and
-/// amount from (stored in the document note), so the card alone is enough
-/// to review.
-class _FieldSummary extends ConsumerWidget {
-  const _FieldSummary({required this.document});
+/// Title, "Kategorie / Absender" + date, then document type, tags and custom
+/// fields as one flowing line of chips. Inbox tags are left out (redundant here).
+class _CardInfo extends ConsumerWidget {
+  const _CardInfo({required this.document});
 
   final Document document;
-
-  static const _quotePrefixes = ['Frist laut Text', 'Betrag laut Text'];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = AppTokens.of(context);
+    final text = Theme.of(context).textTheme;
     final correspondents = ref.watch(correspondentsProvider).valueOrNull ?? {};
     final docTypes = ref.watch(documentTypesProvider).valueOrNull ?? {};
     final storagePaths = ref.watch(storagePathsProvider).valueOrNull ?? {};
     final tags = ref.watch(tagsProvider).valueOrNull ?? {};
     final fieldDefs = ref.watch(customFieldsProvider).valueOrNull ?? {};
-    final labelStyle = Theme.of(context)
-        .textTheme
-        .bodySmall
-        ?.copyWith(color: tokens.inkSoft);
-    final valueStyle = Theme.of(context).textTheme.bodyMedium;
 
-    final tagNames = document.tags
-        .map((id) => tags[id])
-        .where((t) => t != null && !t.isInboxTag)
-        .map((t) => t!.name)
-        .join(', ');
-    final rows = <(String, String)>[
-      ('Absender', correspondents[document.correspondent]?.name ?? '—'),
-      ('Typ', docTypes[document.documentType]?.name ?? '—'),
-      ('Kategorie', storagePaths[document.storagePath]?.name ?? '—'),
-      ('Datum',
-          document.created != null ? formatDate(document.created!) : '—'),
-      ('Tags', tagNames.isEmpty ? '—' : tagNames),
-      for (final f in document.customFields)
-        if (fieldDefs[f.field] != null)
-          (fieldDefs[f.field]!.name, _fieldValue(f.value, fieldDefs[f.field]!)),
+    final origin = [
+      storagePaths[document.storagePath]?.name,
+      correspondents[document.correspondent]?.name,
+    ].whereType<String>().join(' / ');
+    final docType = docTypes[document.documentType]?.name;
+    final visibleTags = [
+      for (final id in document.tags)
+        if (tags[id] case final t? when !t.isInboxTag) t,
     ];
-    final quotes = [
-      for (final n in document.notes)
-        ...n.note
-            .split('\n')
-            .where((l) => _quotePrefixes.any((p) => l.startsWith(p))),
+    final fields = [
+      for (final f in document.customFields)
+        if (fieldDefs[f.field] case final def? when f.value != null)
+          _fieldLabel(f.value, def),
     ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final (label, value) in rows)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 2),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(width: 84, child: Text(label, style: labelStyle)),
-                Expanded(child: Text(value, style: valueStyle)),
-              ],
-            ),
+        Text(document.title, style: text.titleMedium),
+        const SizedBox(height: Spacing.xs),
+        // Correspondent keeps the full width; the date sits at the right end
+        // when it fits and drops to its own line when it doesn't.
+        SizedBox(
+          width: double.infinity,
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            spacing: Spacing.md,
+            children: [
+              Text(origin.isEmpty ? 'Kein Absender' : origin,
+                  style: text.bodyMedium?.copyWith(
+                      color: origin.isEmpty ? tokens.inkSoft : null)),
+              if (document.created != null)
+                Text(formatDate(document.created!),
+                    style: text.bodyMedium?.copyWith(color: tokens.inkSoft)),
+            ],
           ),
-        for (final q in quotes)
-          Padding(
-            padding: const EdgeInsets.only(top: Spacing.xs),
-            child: Text(q,
-                style: labelStyle?.copyWith(fontStyle: FontStyle.italic)),
-          ),
+        ),
+        const SizedBox(height: Spacing.sm),
+        Wrap(
+          spacing: Spacing.sm,
+          runSpacing: Spacing.xs,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            if (docType != null)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.description_outlined,
+                      size: 16, color: tokens.inkSoft),
+                  const SizedBox(width: 2),
+                  Text(docType, style: text.bodyMedium),
+                ],
+              ),
+            for (final t in visibleTags) TagChip(tag: t),
+            for (final label in fields) _FieldChip(label: label),
+          ],
+        ),
       ],
     );
   }
 
-  static String _fieldValue(dynamic value, CustomField def) {
-    if (value == null) return '—';
-    if (def.dataType == 'boolean') return value == true ? 'Ja' : 'Nein';
-    return displayCustomFieldValue(value, def.dataType,
-        extraData: def.extraData);
+  static String _fieldLabel(dynamic value, CustomField def) {
+    if (def.dataType == 'boolean') {
+      return value == true ? '${def.name} ✓' : '${def.name} ✗';
+    }
+    final shown = def.dataType == 'monetary'
+        ? formatMoney(value.toString())
+        : displayCustomFieldValue(value, def.dataType,
+            extraData: def.extraData);
+    return '${def.name}: $shown';
+  }
+}
+
+class _FieldChip extends StatelessWidget {
+  const _FieldChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: Spacing.sm, vertical: 2),
+      decoration: BoxDecoration(
+        border: Border.all(color: tokens.line),
+        borderRadius: BorderRadius.circular(Radii.pill),
+      ),
+      child: Text(label, style: Theme.of(context).textTheme.bodySmall),
+    );
+  }
+}
+
+/// Page preview with Tinder-style paging: tap the right half for the next
+/// page, the left half for the previous one. Shows the thumbnail until the
+/// PDF is downloaded; non-PDF originals stay on the thumbnail.
+class _PagedPreview extends ConsumerStatefulWidget {
+  const _PagedPreview(
+      {super.key, required this.document, required this.interactive});
+
+  final Document document;
+  final bool interactive;
+
+  @override
+  ConsumerState<_PagedPreview> createState() => _PagedPreviewState();
+}
+
+class _PagedPreviewState extends ConsumerState<_PagedPreview> {
+  PdfDocument? _pdf;
+  final _pages = <int, Uint8List>{};
+  int _page = 1;
+  bool _disposed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.interactive) _open();
+  }
+
+  @override
+  void didUpdateWidget(_PagedPreview old) {
+    super.didUpdateWidget(old);
+    if (widget.interactive && !old.interactive && _pdf == null) _open();
+  }
+
+  Future<void> _open() async {
+    try {
+      final api = ref.read(paperlessApiProvider);
+      final dir = await getTemporaryDirectory();
+      final id = widget.document.id;
+      final file = await api.downloadDocumentTyped(
+          id, (ext) => '${dir.path}/inbox_$id.$ext');
+      if (_disposed || !isPdfFile(file.path)) return;
+      final pdf = await PdfDocument.openFile(file.path);
+      if (_disposed) return pdf.close();
+      setState(() => _pdf = pdf);
+    } on Exception {
+      // Thumbnail stays; paging just isn't available for this document.
+    }
+  }
+
+  Future<void> _show(int page) async {
+    final pdf = _pdf;
+    if (pdf == null || page < 1 || page > pdf.pagesCount) return;
+    setState(() => _page = page);
+    if (_pages.containsKey(page)) return;
+    final p = await pdf.getPage(page);
+    final img = await p.render(
+        width: p.width * 2, height: p.height * 2, format: PdfPageImageFormat.png);
+    await p.close();
+    if (!_disposed && img != null) setState(() => _pages[page] = img.bytes);
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _pdf?.close();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
+    final api = ref.watch(paperlessApiProvider);
+    final count = _pdf?.pagesCount ?? 1;
+    final bytes = _pages[_page];
+
+    final image = bytes != null
+        ? Image.memory(bytes,
+            fit: BoxFit.fitWidth,
+            alignment: Alignment.topCenter,
+            gaplessPlayback: true)
+        : CachedNetworkImage(
+            imageUrl: api.thumbnailUrl(widget.document.id),
+            httpHeaders: {'Authorization': api.authToken},
+            fit: BoxFit.cover,
+            alignment: Alignment.topCenter,
+            errorWidget: (_, __, ___) => Icon(Icons.description_outlined,
+                size: 56, color: tokens.inkSoft),
+          );
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapUp: widget.interactive && count > 1
+          ? (d) => _show(d.localPosition.dx > context.size!.width / 2
+              ? _page + 1
+              : _page - 1)
+          : null,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          ColoredBox(color: tokens.paper, child: image),
+          if (count > 1)
+            Positioned(
+              top: Spacing.sm,
+              left: Spacing.sm,
+              right: Spacing.sm,
+              child: Row(
+                children: [
+                  for (var i = 1; i <= count; i++)
+                    Expanded(
+                      child: Container(
+                        height: 4,
+                        margin: const EdgeInsets.symmetric(horizontal: 2),
+                        decoration: BoxDecoration(
+                          color: i == _page
+                              ? Colors.black54
+                              : Colors.black.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
 
