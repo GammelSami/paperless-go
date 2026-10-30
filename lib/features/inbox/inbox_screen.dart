@@ -347,21 +347,19 @@ class _InboxCard extends ConsumerWidget {
               if (!dimmed)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(
-                    Spacing.sm,
+                    Spacing.lg,
                     0,
                     Spacing.lg,
                     Spacing.md,
                   ),
                   child: Row(
                     children: [
-                      TextButton.icon(
+                      IconButton.outlined(
                         onPressed: onEdit,
-                        icon: Icon(
-                          Icons.edit_outlined,
-                          size: 18,
-                          color: tokens.stamp,
-                        ),
-                        label: const Text('Bearbeiten'),
+                        tooltip: 'Bearbeiten',
+                        iconSize: 28,
+                        padding: const EdgeInsets.all(Spacing.md),
+                        icon: Icon(Icons.edit_outlined, color: tokens.stamp),
                       ),
                       const Spacer(),
                       IconButton.filled(
