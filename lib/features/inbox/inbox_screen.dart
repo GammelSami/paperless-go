@@ -53,15 +53,21 @@ class InboxScreen extends ConsumerWidget {
             const QueueStatusBanner(),
             Padding(
               padding: const EdgeInsets.fromLTRB(
-                  Spacing.xl, Spacing.lg, Spacing.md, Spacing.sm),
+                Spacing.xl,
+                Spacing.lg,
+                Spacing.md,
+                Spacing.sm,
+              ),
               child: Row(
                 children: [
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Inbox',
-                            style: Theme.of(context).textTheme.headlineMedium),
+                        Text(
+                          'Inbox',
+                          style: Theme.of(context).textTheme.headlineMedium,
+                        ),
                         Text(
                           switch (inboxState.valueOrNull?.totalCount) {
                             null => ' ',
@@ -69,9 +75,7 @@ class InboxScreen extends ConsumerWidget {
                             1 => '1 to sort',
                             final n => '$n to sort',
                           },
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
+                          style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(color: tokens.inkSoft),
                         ),
                       ],
@@ -96,8 +100,10 @@ class InboxScreen extends ConsumerWidget {
               child: inboxState.when(
                 loading: () => const _StackSkeleton(),
                 error: (err, _) => _ErrorPanel(
-                  message:
-                      friendlyApiMessage(err, fallback: 'Failed to load inbox.'),
+                  message: friendlyApiMessage(
+                    err,
+                    fallback: 'Failed to load inbox.',
+                  ),
                   onRetry: () => ref.invalidate(inboxNotifierProvider),
                 ),
                 data: (inbox) => inbox.documents.isEmpty
@@ -165,7 +171,11 @@ class _CardStackState extends ConsumerState<_CardStack>
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-          Spacing.xl, Spacing.sm, Spacing.xl, Spacing.lg),
+        Spacing.xl,
+        Spacing.sm,
+        Spacing.xl,
+        Spacing.lg,
+      ),
       child: Stack(
         alignment: Alignment.center,
         children: [
@@ -218,9 +228,10 @@ class _CardStackState extends ConsumerState<_CardStack>
   }
 
   Future<void> _animateTo(Offset target) {
-    _animation = Tween(begin: _drag, end: target).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
-    );
+    _animation = Tween(
+      begin: _drag,
+      end: target,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
     return _controller.forward(from: 0).orCancel.then((_) {
       _animation = null;
     }, onError: (_) => _animation = null);
@@ -258,7 +269,9 @@ class _CardStackState extends ConsumerState<_CardStack>
       if (!mounted) return;
       setState(() => _busy = false);
       showErrorBanner(
-          context, 'Annehmen fehlgeschlagen: ${friendlyApiMessage(e)}');
+        context,
+        'Annehmen fehlgeschlagen: ${friendlyApiMessage(e)}',
+      );
     }
   }
 
@@ -322,7 +335,11 @@ class _InboxCard extends ConsumerWidget {
                   onTap: onTap,
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(
-                        Spacing.lg, Spacing.md, Spacing.lg, Spacing.xs),
+                      Spacing.lg,
+                      Spacing.md,
+                      Spacing.lg,
+                      Spacing.xs,
+                    ),
                     child: _CardInfo(document: document),
                   ),
                 ),
@@ -330,13 +347,20 @@ class _InboxCard extends ConsumerWidget {
               if (!dimmed)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(
-                      Spacing.sm, 0, Spacing.lg, Spacing.md),
+                    Spacing.sm,
+                    0,
+                    Spacing.lg,
+                    Spacing.md,
+                  ),
                   child: Row(
                     children: [
                       TextButton.icon(
                         onPressed: onEdit,
-                        icon: Icon(Icons.edit_outlined,
-                            size: 18, color: tokens.stamp),
+                        icon: Icon(
+                          Icons.edit_outlined,
+                          size: 18,
+                          color: tokens.stamp,
+                        ),
                         label: const Text('Bearbeiten'),
                       ),
                       const Spacer(),
@@ -395,22 +419,16 @@ class _CardInfo extends ConsumerWidget {
       children: [
         Text(document.title, style: text.titleMedium),
         const SizedBox(height: Spacing.xs),
-        // Correspondent keeps the full width; the date sits at the right end
-        // when it fits and drops to its own line when it doesn't.
-        SizedBox(
-          width: double.infinity,
-          child: Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            spacing: Spacing.md,
-            children: [
-              Text(origin.isEmpty ? 'Kein Absender' : origin,
-                  style: text.bodyMedium?.copyWith(
-                      color: origin.isEmpty ? tokens.inkSoft : null)),
-              if (document.created != null)
-                Text(formatDate(document.created!),
-                    style: text.bodyMedium?.copyWith(color: tokens.inkSoft)),
-            ],
+        // Path / correspondent is never wrapped by the date: the date sits at
+        // the right end when both fit on one line, otherwise it moves up onto
+        // its own line above (right-aligned), and the path gets the full width.
+        _OriginDateRow(
+          origin: origin.isEmpty ? 'Kein Absender' : origin,
+          originStyle: text.bodyMedium?.copyWith(
+            color: origin.isEmpty ? tokens.inkSoft : null,
           ),
+          date: document.created != null ? formatDate(document.created!) : null,
+          dateStyle: text.bodyMedium?.copyWith(color: tokens.inkSoft),
         ),
         const SizedBox(height: Spacing.sm),
         Wrap(
@@ -422,8 +440,11 @@ class _CardInfo extends ConsumerWidget {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.description_outlined,
-                      size: 16, color: tokens.inkSoft),
+                  Icon(
+                    Icons.description_outlined,
+                    size: 16,
+                    color: tokens.inkSoft,
+                  ),
                   const SizedBox(width: 2),
                   Text(docType, style: text.bodyMedium),
                 ],
@@ -442,9 +463,63 @@ class _CardInfo extends ConsumerWidget {
     }
     final shown = def.dataType == 'monetary'
         ? formatMoney(value.toString())
-        : displayCustomFieldValue(value, def.dataType,
-            extraData: def.extraData);
+        : displayCustomFieldValue(
+            value,
+            def.dataType,
+            extraData: def.extraData,
+          );
     return '${def.name}: $shown';
+  }
+}
+
+class _OriginDateRow extends StatelessWidget {
+  const _OriginDateRow({
+    required this.origin,
+    required this.originStyle,
+    required this.date,
+    required this.dateStyle,
+  });
+
+  final String origin;
+  final TextStyle? originStyle;
+  final String? date;
+  final TextStyle? dateStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    final originText = Text(origin, style: originStyle);
+    final date = this.date;
+    if (date == null) return originText;
+    final dateText = Text(date, style: dateStyle);
+    return LayoutBuilder(
+      builder: (context, box) {
+        double widthOf(String s, TextStyle? style) => (TextPainter(
+          text: TextSpan(text: s, style: style),
+          textDirection: TextDirection.ltr,
+          textScaler: MediaQuery.textScalerOf(context),
+        )..layout()).width;
+        final fits =
+            widthOf(origin, originStyle) +
+                Spacing.md +
+                widthOf(date, dateStyle) <=
+            box.maxWidth;
+        if (fits) {
+          return Row(
+            children: [
+              Expanded(child: originText),
+              dateText,
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Align(alignment: Alignment.centerRight, child: dateText),
+            originText,
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -471,8 +546,11 @@ class _FieldChip extends StatelessWidget {
 /// page, the left half for the previous one. Shows the thumbnail until the
 /// PDF is downloaded; non-PDF originals stay on the thumbnail.
 class _PagedPreview extends ConsumerStatefulWidget {
-  const _PagedPreview(
-      {super.key, required this.document, required this.interactive});
+  const _PagedPreview({
+    super.key,
+    required this.document,
+    required this.interactive,
+  });
 
   final Document document;
   final bool interactive;
@@ -505,7 +583,9 @@ class _PagedPreviewState extends ConsumerState<_PagedPreview> {
       final dir = await getTemporaryDirectory();
       final id = widget.document.id;
       final file = await api.downloadDocumentTyped(
-          id, (ext) => '${dir.path}/inbox_$id.$ext');
+        id,
+        (ext) => '${dir.path}/inbox_$id.$ext',
+      );
       if (_disposed || !isPdfFile(file.path)) return;
       final pdf = await PdfDocument.openFile(file.path);
       if (_disposed) return pdf.close();
@@ -522,7 +602,10 @@ class _PagedPreviewState extends ConsumerState<_PagedPreview> {
     if (_pages.containsKey(page)) return;
     final p = await pdf.getPage(page);
     final img = await p.render(
-        width: p.width * 2, height: p.height * 2, format: PdfPageImageFormat.png);
+      width: p.width * 2,
+      height: p.height * 2,
+      format: PdfPageImageFormat.png,
+    );
     await p.close();
     if (!_disposed && img != null) setState(() => _pages[page] = img.bytes);
   }
@@ -542,25 +625,32 @@ class _PagedPreviewState extends ConsumerState<_PagedPreview> {
     final bytes = _pages[_page];
 
     final image = bytes != null
-        ? Image.memory(bytes,
+        ? Image.memory(
+            bytes,
             fit: BoxFit.fitWidth,
             alignment: Alignment.topCenter,
-            gaplessPlayback: true)
+            gaplessPlayback: true,
+          )
         : CachedNetworkImage(
             imageUrl: api.thumbnailUrl(widget.document.id),
             httpHeaders: {'Authorization': api.authToken},
             fit: BoxFit.cover,
             alignment: Alignment.topCenter,
-            errorWidget: (_, __, ___) => Icon(Icons.description_outlined,
-                size: 56, color: tokens.inkSoft),
+            errorWidget: (_, __, ___) => Icon(
+              Icons.description_outlined,
+              size: 56,
+              color: tokens.inkSoft,
+            ),
           );
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTapUp: widget.interactive && count > 1
-          ? (d) => _show(d.localPosition.dx > context.size!.width / 2
-              ? _page + 1
-              : _page - 1)
+          ? (d) => _show(
+              d.localPosition.dx > context.size!.width / 2
+                  ? _page + 1
+                  : _page - 1,
+            )
           : null,
       child: Stack(
         fit: StackFit.expand,
@@ -607,14 +697,17 @@ class _EmptyInbox extends StatelessWidget {
         children: [
           const StampChip(label: 'ALL CAUGHT UP', rotated: true),
           const SizedBox(height: Spacing.lg),
-          Text('Nothing to sort',
-              style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            'Nothing to sort',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           const SizedBox(height: Spacing.xs),
-          Text('New documents land here first.',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(color: tokens.inkSoft)),
+          Text(
+            'New documents land here first.',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: tokens.inkSoft),
+          ),
           const SizedBox(height: Spacing.lg),
           TextButton.icon(
             onPressed: () => GoRouter.of(context).go('/scan'),
@@ -634,16 +727,20 @@ class _StackSkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = AppTokens.of(context);
     Widget bar(double w) => Container(
-          height: 14,
-          width: w,
-          decoration: BoxDecoration(
-            color: tokens.line,
-            borderRadius: BorderRadius.circular(Radii.sm),
-          ),
-        );
+      height: 14,
+      width: w,
+      decoration: BoxDecoration(
+        color: tokens.line,
+        borderRadius: BorderRadius.circular(Radii.sm),
+      ),
+    );
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-          Spacing.xl, Spacing.sm, Spacing.xl, Spacing.lg),
+        Spacing.xl,
+        Spacing.sm,
+        Spacing.xl,
+        Spacing.lg,
+      ),
       child: Card(
         child: Padding(
           padding: const EdgeInsets.all(Spacing.lg),
@@ -688,15 +785,22 @@ class _ErrorPanel extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.cloud_off,
-                size: 48, color: Theme.of(context).colorScheme.error),
+            Icon(
+              Icons.cloud_off,
+              size: 48,
+              color: Theme.of(context).colorScheme.error,
+            ),
             const SizedBox(height: Spacing.lg),
-            Text('Failed to load inbox',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Failed to load inbox',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: Spacing.sm),
-            Text(message,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
             const SizedBox(height: Spacing.lg),
             FilledButton.tonal(onPressed: onRetry, child: const Text('Retry')),
           ],
