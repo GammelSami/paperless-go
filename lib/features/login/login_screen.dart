@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -69,8 +68,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  // Fork: debug builds may use plain http:// (local test server in the emulator)
-  bool _blockHttp(String url) => !kDebugMode && url.startsWith('http://');
+  // Fork: `flutter run --dart-define=ALLOW_HTTP=true` allows plain http:// for
+  // the local test server in the emulator; every normal build still blocks it.
+  static const _allowHttp = bool.fromEnvironment('ALLOW_HTTP');
+  bool _blockHttp(String url) => !_allowHttp && url.startsWith('http://');
 
   String _normalizeUrl(String url) {
     if (url.isEmpty) return '';
