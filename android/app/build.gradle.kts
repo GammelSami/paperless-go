@@ -39,7 +39,8 @@ android {
         // Play Store identity (the original com.ventoux.paperlessgo was burned on
         // Play and can never be reused). namespace stays com.ventoux.paperlessgo —
         // it is internal-only and decoupled from applicationId.
-        applicationId = "com.ventouxlabs.paperlessgo"
+        // Fork: own id so it installs next to upstream Paperless Go
+        applicationId = "com.gammelsami.paperlessgo"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -49,7 +50,7 @@ android {
         // `profile` variant, which is not enumerated in buildTypes below — setting
         // the placeholder only on debug/release left profile with an unresolved
         // ${appLabel} and hard-failed manifest merging on `flutter build --profile`.
-        manifestPlaceholders["appLabel"] = "Paperless Go"
+        manifestPlaceholders["appLabel"] = "Paperless Sam"
     }
 
     signingConfigs {

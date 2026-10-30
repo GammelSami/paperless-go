@@ -206,8 +206,8 @@ void main() {
     ) async {
       await pumpHeader(tester);
 
-      expect(find.textContaining('Mar 31, 2026'), findsOneWidget);
-      expect(find.textContaining('Apr 15, 2026'), findsOneWidget);
+      expect(find.textContaining('31.03.2026'), findsOneWidget);
+      expect(find.textContaining('15.04.2026'), findsOneWidget);
       expect(find.textContaining("date isn't changed"), findsOneWidget);
     });
 

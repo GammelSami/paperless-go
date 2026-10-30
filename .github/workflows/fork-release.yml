@@ -1,0 +1,65 @@
+name: Fork release
+
+# Every push to main builds a signed APK and publishes it as a GitHub release.
+# Obtainium on the phone watches these releases and installs updates.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fork-release
+  cancel-in-progress: false
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.3'
+          channel: stable
+          cache: true
+
+      - name: Signing key
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/keystore.p12
+          {
+            echo "storePassword=${{ secrets.STORE_PASSWORD }}"
+            echo "keyPassword=${{ secrets.STORE_PASSWORD }}"
+            echo "keyAlias=release"
+            echo "storeFile=../keystore.p12"
+          } > android/key.properties
+
+      - run: flutter pub get
+
+      - name: Build APK
+        run: |
+          BUILD=$((1000 + ${{ github.run_number }}))
+          flutter build apk --release --build-number=$BUILD
+          VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')
+          echo "TAG=v$VERSION-sam.${{ github.run_number }}" >> "$GITHUB_ENV"
+          cp build/app/outputs/flutter-apk/app-release.apk "paperless-sam-v$VERSION-sam.${{ github.run_number }}.apk"
+
+      - name: Refuse unsigned APK
+        run: |
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$APKSIGNER" verify --print-certs paperless-sam-*.apk | grep -i "SHA-256 digest"
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ env.TAG }}
+          target_commitish: ${{ github.sha }}
+          files: paperless-sam-*.apk
+          generate_release_notes: true

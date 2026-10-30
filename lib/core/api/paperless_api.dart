@@ -81,6 +81,18 @@ class PaperlessApi {
     return Document.fromJson(data);
   }
 
+  /// Dates Paperless found in the document text (newest suggestions first).
+  Future<List<DateTime>> getSuggestedDates(int documentId) async {
+    final response = await _dio.get('api/documents/$documentId/suggestions/');
+    final data = response.data;
+    final dates = data is Map<String, dynamic> ? data['dates'] : null;
+    if (dates is! List) return const [];
+    return dates
+        .map((d) => DateTime.tryParse(d.toString()))
+        .whereType<DateTime>()
+        .toList();
+  }
+
   Future<Document> updateDocument(int id, Map<String, dynamic> data) async {
     final response = await _dio.patch('api/documents/$id/', data: data);
     return Document.fromJson(response.data as Map<String, dynamic>);

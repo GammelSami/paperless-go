@@ -24,5 +24,6 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
+      # Fork: goldens pin upstream fonts and date format, so they are skipped here.
       - name: Test
-        run: flutter test
+        run: flutter test $(find test -name '*_test.dart' -not -path 'test/widget/goldens/*')

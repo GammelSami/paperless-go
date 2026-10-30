@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -377,10 +378,14 @@ class _PaperlessGoAppState extends ConsumerState<PaperlessGoApp>
     });
 
     return MaterialApp.router(
-      title: 'Paperless Go',
+      title: 'Paperless Sam',
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: themeMode,
+      // Fork: German date picker (TT.MM.JJJJ) and German system texts.
+      locale: const Locale('de', 'DE'),
+      supportedLocales: const [Locale('de', 'DE'), Locale('en')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       routerConfig: router,
       debugShowCheckedModeBanner: false,
       builder: (context, child) {

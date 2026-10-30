@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../core/auth/auth_provider.dart';
 import '../../core/database/app_database.dart';
@@ -9,6 +8,7 @@ import '../../shared/widgets/empty_state.dart';
 import 'queue_error_text.dart';
 import 'queue_row_status.dart';
 import 'upload_queue_notifier.dart';
+import '../../shared/format.dart';
 
 /// Everything waiting to reach the server, and why it hasn't.
 ///
@@ -146,7 +146,7 @@ class _QueueRow extends ConsumerWidget {
         children: [
           Text(
             '${_labelFor(status)} · queued '
-            '${DateFormat.yMMMd().format(upload.queuedAt)}',
+            '${dateFormatDe.format(upload.queuedAt)}',
             style: textTheme.bodySmall?.copyWith(
               color: _colorFor(status, colorScheme),
             ),

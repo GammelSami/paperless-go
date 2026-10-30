@@ -25,7 +25,7 @@ void main() {
       deletedAt: DateTime(2026, 9, 30),
     );
 
-    expect(trashDeletedLabel(doc), 'Deleted Sep 30, 2026');
+    expect(trashDeletedLabel(doc), 'Deleted 30.09.2026');
   });
 
   test('falls back to modified — set when the document was moved to trash', () {
@@ -36,7 +36,7 @@ void main() {
       modified: DateTime(2026, 9, 28),
     );
 
-    expect(trashDeletedLabel(doc), 'Deleted Sep 28, 2026');
+    expect(trashDeletedLabel(doc), 'Deleted 28.09.2026');
   });
 
   test('says just "Deleted" when both dates are missing, not the created date',

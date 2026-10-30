@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/design_tokens.dart';
 import 'ai_suggestions_prefill.dart';
+import '../../../shared/format.dart';
 
 /// The `topSlot` of the metadata sheet after "Suggest with AI": what the AI
 /// proposed that the sheet's own fields can't show. Everything here is
@@ -33,7 +33,7 @@ class _AiSuggestionsHeaderState extends State<AiSuggestionsHeader> {
     final textTheme = Theme.of(context).textTheme;
     final hint = textTheme.bodySmall?.copyWith(color: tokens.inkSoft);
     final title = prefill.suggestedTitle;
-    final dateFormat = DateFormat.yMMMd();
+    final dateFormat = dateFormatDe;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

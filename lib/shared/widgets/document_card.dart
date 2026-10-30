@@ -1,6 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../../core/design_tokens.dart';
 import '../../core/api/thumbnail_cache_bust.dart';
@@ -10,6 +9,7 @@ import '../../core/models/document.dart';
 import '../../core/models/document_type.dart';
 import '../../core/models/tag.dart';
 import 'tag_chip.dart';
+import '../format.dart';
 
 class DocumentCard extends StatelessWidget {
   final Document document;
@@ -56,7 +56,7 @@ class DocumentCard extends StatelessWidget {
     final subtitle = [
       if (correspondent != null) correspondent.name,
       if (docType != null) docType.name,
-      if (document.created != null) DateFormat.yMMMd().format(document.created!),
+      if (document.created != null) dateFormatDe.format(document.created!),
     ].join(' · ');
 
     return Card(

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../core/api/api_providers.dart';
 import '../../core/design_tokens.dart';
 import '../../shared/widgets/tag_chip.dart';
 import 'documents_notifier.dart';
+import '../../shared/format.dart';
 
 class FilterBottomSheet extends ConsumerStatefulWidget {
   final DocumentsFilter currentFilter;
@@ -311,7 +311,7 @@ class _DatePickerField extends StatelessWidget {
             if (picked != null) onPicked(picked);
           },
           child: Text(
-            value != null ? DateFormat.yMd().format(value!) : 'Any',
+            value != null ? dateFormatDe.format(value!) : 'Any',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
         ),

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import '../../core/models/document.dart';
 import 'trash_notifier.dart';
 import '../../shared/widgets/paginated_list_view.dart';
+import '../../shared/format.dart';
 
 /// Subtitle for a trashed document. Uses the server's `deleted_at`, falling
 /// back to `modified` (also set when the document is moved to the trash, and
@@ -14,7 +14,7 @@ String trashDeletedLabel(Document doc) {
   final deleted = (doc.deletedAt ?? doc.modified)?.toLocal();
   return deleted == null
       ? 'Deleted'
-      : 'Deleted ${DateFormat.yMMMd().format(deleted)}';
+      : 'Deleted ${dateFormatDe.format(deleted)}';
 }
 
 class TrashScreen extends ConsumerStatefulWidget {

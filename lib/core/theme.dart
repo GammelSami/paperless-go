@@ -109,8 +109,9 @@ class AppTheme {
       bodyColor: tokens.ink,
       displayColor: tokens.ink,
     );
+    // Fork: Inter for titles too (SpaceGrotesk titles were hard to read).
     TextStyle? grotesk(TextStyle? s) => s?.copyWith(
-          fontFamily: 'SpaceGrotesk',
+          fontFamily: 'Inter',
           fontWeight: FontWeight.w600,
         );
     final textTheme = inter.copyWith(

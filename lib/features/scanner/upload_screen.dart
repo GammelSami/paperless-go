@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 
 import '../../core/api/api_providers.dart';
 import '../../core/design_tokens.dart';
@@ -17,6 +16,7 @@ import 'processing/metadata_matcher.dart';
 import 'upload_notifier.dart';
 import '../documents/ai_edit_trail_notifier.dart';
 import '../../core/api/api_error_mapper.dart';
+import '../../shared/format.dart';
 
 /// Metadata entry and upload screen.
 ///
@@ -331,7 +331,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
     // Date
     if (_created != null) {
       chips.add(_appliedChip(
-        label: DateFormat.yMMMd().format(_created!),
+        label: dateFormatDe.format(_created!),
         icon: Icons.calendar_today_outlined,
         suggested: _suggestedDate,
         onRemove: () => setState(() {
@@ -342,7 +342,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
       ));
     } else if (s?.detectedDate != null) {
       chips.add(_reAcceptChip(
-        'Add ${DateFormat.yMMMd().format(s!.detectedDate!)}',
+        'Add ${dateFormatDe.format(s!.detectedDate!)}',
         () => setState(() {
           _created = s.detectedDate;
           _suggestedDate = true;

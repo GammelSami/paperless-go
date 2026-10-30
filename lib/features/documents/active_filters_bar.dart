@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../../core/design_tokens.dart';
 import '../../core/models/correspondent.dart';
@@ -7,6 +6,7 @@ import '../../core/models/document_type.dart';
 import '../../core/models/tag.dart';
 import '../../shared/widgets/stamp_chip.dart';
 import 'documents_notifier.dart';
+import '../../shared/format.dart';
 
 /// The active-filter strip: one dismissible stamp pill per applied filter,
 /// shown only when at least one filter is set. Dismissing a pill emits a
@@ -72,10 +72,10 @@ class ActiveFiltersBar extends StatelessWidget {
     }
     if (filter.createdDateFrom != null || filter.createdDateTo != null) {
       final from = filter.createdDateFrom != null
-          ? DateFormat.yMd().format(filter.createdDateFrom!)
+          ? dateFormatDe.format(filter.createdDateFrom!)
           : '…';
       final to = filter.createdDateTo != null
-          ? DateFormat.yMd().format(filter.createdDateTo!)
+          ? dateFormatDe.format(filter.createdDateTo!)
           : '…';
       pills.add(StampChip(
         label: '$from – $to',

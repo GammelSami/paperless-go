@@ -75,8 +75,9 @@ void main() {
       expect(displayCustomFieldValue(false, 'boolean'), 'No');
     });
 
-    test('monetary strips redundant null guard', () {
-      expect(displayCustomFieldValue('9.99', 'monetary'), r'$9.99');
+    test('monetary shows German format with sign', () {
+      expect(displayCustomFieldValue('9.99', 'monetary'), '+9,99 €');
+      expect(displayCustomFieldValue('EUR-91.80', 'monetary'), '-91,80 €');
     });
 
     test('null returns Not set', () {

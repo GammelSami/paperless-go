@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../core/api/api_providers.dart';
 import '../../core/design_tokens.dart';
@@ -9,6 +8,7 @@ import '../../core/models/document_type.dart';
 import '../../core/models/tag.dart';
 import 'metadata_dropdown.dart';
 import 'stamp_chip.dart';
+import '../format.dart';
 
 /// Immutable result of editing document metadata in [MetadataSheet].
 class MetadataSheetResult {
@@ -161,7 +161,7 @@ class _MetadataSheetState extends ConsumerState<MetadataSheet> {
                       ],
                     ),
                     subtitle: Text(_created != null
-                        ? DateFormat.yMMMd().format(_created!)
+                        ? dateFormatDe.format(_created!)
                         : 'Auto-detect'),
                     onTap: _pickDate,
                     trailing: _created != null

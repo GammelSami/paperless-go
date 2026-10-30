@@ -6,14 +6,14 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_error_mapper.dart';
 import '../../core/api/api_providers.dart';
 import '../../core/design_tokens.dart';
-import '../../core/models/correspondent.dart';
+import '../../core/models/custom_field.dart';
 import '../../core/models/document.dart';
-import '../../core/models/document_type.dart';
-import '../../shared/widgets/metadata_dropdown.dart';
+import '../../shared/format.dart';
 import '../../shared/widgets/stamp_chip.dart';
+import '../documents/document_detail_screen.dart' show displayCustomFieldValue;
 import '../scanner/processing/metadata_matcher.dart';
+import 'inbox_edit_sheet.dart';
 import 'inbox_notifier.dart';
-import 'inbox_suggestions_provider.dart';
 import '../upload_queue/queue_status_banner.dart';
 
 /// Inbox as a swipeable card stack — the highest-frequency workflow.
@@ -230,10 +230,9 @@ class _CardStackState extends ConsumerState<_CardStack>
     final width = MediaQuery.sizeOf(context).width;
     _animateTo(Offset(width * 1.2, 0));
 
-    final suggestions = ref
-            .read(inboxSuggestionsProvider(doc))
-            .valueOrNull ??
-        const MetadataSuggestions();
+    // Fork: accepting never applies Paperless' own guesses; the AI already
+    // filled the fields, accept only removes the inbox tag.
+    const suggestions = MetadataSuggestions();
     final notifier = ref.read(inboxNotifierProvider.notifier);
     final messenger = ScaffoldMessenger.of(context);
     try {
@@ -245,14 +244,14 @@ class _CardStackState extends ConsumerState<_CardStack>
       });
       if (previous != null) {
         messenger.showSnackBar(SnackBar(
-          content: Text('Filed "${doc.title}"'),
+          content: Text('Angenommen: "${doc.title}"'),
           // Flutter defaults an action-bearing SnackBar to persist: true
           // (snack_bar.dart: `persist = persist ?? action != null`) — without
           // this, the auto-dismiss timer fires but early-returns before
           // hiding it, and never re-arms, so it stays pinned indefinitely.
           persist: false,
           action: SnackBarAction(
-            label: 'Undo',
+            label: 'Rückgängig',
             onPressed: () => notifier.undoAccept(doc.id, previous),
           ),
         ));
@@ -273,7 +272,7 @@ class _CardStackState extends ConsumerState<_CardStack>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (_) => _EditSheet(document: doc),
+      builder: (_) => InboxEditSheet(document: doc),
     );
   }
 }
@@ -299,15 +298,6 @@ class _InboxCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = AppTokens.of(context);
     final api = ref.watch(paperlessApiProvider);
-    final correspondents =
-        ref.watch(correspondentsProvider).valueOrNull ?? {};
-
-    final meta = <String>[
-      if (document.correspondent != null)
-        correspondents[document.correspondent]?.name ?? '',
-      if (document.created != null)
-        MaterialLocalizations.of(context).formatMediumDate(document.created!),
-    ].where((s) => s.isNotEmpty).join(' · ');
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -326,6 +316,7 @@ class _InboxCard extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
+                flex: 2,
                 child: SizedBox(
                   width: double.infinity,
                   child: ColoredBox(
@@ -344,29 +335,22 @@ class _InboxCard extends ConsumerWidget {
                   ),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                    Spacing.lg, Spacing.md, Spacing.lg, Spacing.sm),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      document.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    if (meta.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(meta,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(color: tokens.inkSoft)),
+              Flexible(
+                flex: 3,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(
+                      Spacing.lg, Spacing.md, Spacing.lg, Spacing.sm),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        document.title,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: Spacing.sm),
+                      if (!dimmed) _FieldSummary(document: document),
                     ],
-                    const SizedBox(height: Spacing.sm),
-                    if (!dimmed) _SuggestionChips(document: document),
-                  ],
+                  ),
                 ),
               ),
               if (!dimmed)
@@ -379,18 +363,14 @@ class _InboxCard extends ConsumerWidget {
                         onPressed: onEdit,
                         icon: Icon(Icons.edit_outlined,
                             size: 18, color: tokens.stamp),
-                        label: const Text('Edit'),
+                        label: const Text('Bearbeiten'),
                       ),
-                      TextButton.icon(
-                        onPressed: onTap,
-                        icon: const Icon(Icons.description_outlined, size: 18),
-                        label: const Text('Details'),
-                      ),
+                      const SizedBox(width: Spacing.sm),
                       Expanded(
                         child: FilledButton.icon(
                           onPressed: onAccept,
                           icon: const Icon(Icons.check, size: 18),
-                          label: const Text('Accept'),
+                          label: const Text('Annehmen'),
                         ),
                       ),
                     ],
@@ -404,192 +384,82 @@ class _InboxCard extends ConsumerWidget {
   }
 }
 
-/// OCR-matched suggestions rendered as the signature stamp chips.
-class _SuggestionChips extends ConsumerWidget {
-  const _SuggestionChips({required this.document});
+/// Fork: every field the AI filled in, plus the sentences it took deadline and
+/// amount from (stored in the document note), so the card alone is enough
+/// to review.
+class _FieldSummary extends ConsumerWidget {
+  const _FieldSummary({required this.document});
 
   final Document document;
+
+  static const _quotePrefixes = ['Frist laut Text', 'Betrag laut Text'];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = AppTokens.of(context);
-    final suggestionsAsync = ref.watch(inboxSuggestionsProvider(document));
+    final correspondents = ref.watch(correspondentsProvider).valueOrNull ?? {};
+    final docTypes = ref.watch(documentTypesProvider).valueOrNull ?? {};
+    final storagePaths = ref.watch(storagePathsProvider).valueOrNull ?? {};
     final tags = ref.watch(tagsProvider).valueOrNull ?? {};
-    final correspondents = ref.watch(correspondentsProvider).valueOrNull ?? {};
-    final docTypes = ref.watch(documentTypesProvider).valueOrNull ?? {};
+    final fieldDefs = ref.watch(customFieldsProvider).valueOrNull ?? {};
+    final labelStyle = Theme.of(context)
+        .textTheme
+        .bodySmall
+        ?.copyWith(color: tokens.inkSoft);
+    final valueStyle = Theme.of(context).textTheme.bodyMedium;
 
-    return SizedBox(
-      height: 76,
-      child: suggestionsAsync.when(
-        loading: () => Align(
-          alignment: Alignment.centerLeft,
-          child: Text('Reading document…',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: tokens.inkSoft)),
-        ),
-        error: (_, __) => const SizedBox.shrink(),
-        data: (s) {
-          final chips = <Widget>[
-            if (s.correspondentId != null &&
-                correspondents[s.correspondentId] != null)
-              StampChip(
-                label: correspondents[s.correspondentId]!.name,
-                icon: Icons.person_outline,
-              ),
-            if (s.documentTypeId != null && docTypes[s.documentTypeId] != null)
-              StampChip(
-                label: docTypes[s.documentTypeId]!.name,
-                icon: Icons.category_outlined,
-              ),
-            for (final id in s.tagIds.take(4))
-              if (tags[id] != null)
-                StampChip(
-                  label: tags[id]!.name,
-                  icon: Icons.sell_outlined,
-                ),
-          ];
-          if (chips.isEmpty) {
-            return Align(
-              alignment: Alignment.centerLeft,
-              child: Text('No suggestions — accept just files it',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: tokens.inkSoft)),
-            );
-          }
-          return Align(
-            alignment: Alignment.centerLeft,
-            child: Wrap(
-              spacing: Spacing.xs,
-              children: chips.take(5).toList(),
+    final tagNames = document.tags
+        .map((id) => tags[id])
+        .where((t) => t != null && !t.isInboxTag)
+        .map((t) => t!.name)
+        .join(', ');
+    final rows = <(String, String)>[
+      ('Absender', correspondents[document.correspondent]?.name ?? '—'),
+      ('Typ', docTypes[document.documentType]?.name ?? '—'),
+      ('Kategorie', storagePaths[document.storagePath]?.name ?? '—'),
+      ('Datum',
+          document.created != null ? formatDate(document.created!) : '—'),
+      ('Tags', tagNames.isEmpty ? '—' : tagNames),
+      for (final f in document.customFields)
+        if (fieldDefs[f.field] != null)
+          (fieldDefs[f.field]!.name, _fieldValue(f.value, fieldDefs[f.field]!)),
+    ];
+    final quotes = [
+      for (final n in document.notes)
+        ...n.note
+            .split('\n')
+            .where((l) => _quotePrefixes.any((p) => l.startsWith(p))),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final (label, value) in rows)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(width: 84, child: Text(label, style: labelStyle)),
+                Expanded(child: Text(value, style: valueStyle)),
+              ],
             ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-/// Edit sheet: quick assign plus remove-from-inbox — the swipe-left target
-/// and the accessible alternative to gestures.
-class _EditSheet extends ConsumerStatefulWidget {
-  const _EditSheet({required this.document});
-
-  final Document document;
-
-  @override
-  ConsumerState<_EditSheet> createState() => _EditSheetState();
-}
-
-class _EditSheetState extends ConsumerState<_EditSheet> {
-  int? _correspondentId;
-  int? _documentTypeId;
-  bool _saving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _correspondentId = widget.document.correspondent;
-    _documentTypeId = widget.document.documentType;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final correspondents = ref.watch(correspondentsProvider).valueOrNull ?? {};
-    final docTypes = ref.watch(documentTypesProvider).valueOrNull ?? {};
-
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-          Spacing.lg, Spacing.lg, Spacing.lg,
-          Spacing.lg + MediaQuery.viewInsetsOf(context).bottom),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(widget.document.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: Spacing.lg),
-          MetadataDropdown<Correspondent>(
-            label: 'Correspondent',
-            value: correspondents[_correspondentId],
-            items: correspondents.values.toList(),
-            displayName: (c) => c.name,
-            onChanged: (c) => setState(() => _correspondentId = c?.id),
           ),
-          const SizedBox(height: Spacing.md),
-          MetadataDropdown<DocumentType>(
-            label: 'Document Type',
-            value: docTypes[_documentTypeId],
-            items: docTypes.values.toList(),
-            displayName: (dt) => dt.name,
-            onChanged: (dt) => setState(() => _documentTypeId = dt?.id),
+        for (final q in quotes)
+          Padding(
+            padding: const EdgeInsets.only(top: Spacing.xs),
+            child: Text(q,
+                style: labelStyle?.copyWith(fontStyle: FontStyle.italic)),
           ),
-          const SizedBox(height: Spacing.lg),
-          FilledButton(
-            onPressed: _saving ? null : _save,
-            child: _saving
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Save'),
-          ),
-          TextButton.icon(
-            onPressed: _saving ? null : _removeFromInbox,
-            icon: const Icon(Icons.done_all, size: 18),
-            label: const Text('Remove from inbox without changes'),
-          ),
-        ],
-      ),
+      ],
     );
   }
 
-  Future<void> _save() async {
-    setState(() => _saving = true);
-    try {
-      final api = ref.read(paperlessApiProvider);
-      await api.updateDocument(widget.document.id, {
-        'correspondent': _correspondentId,
-        'document_type': _documentTypeId,
-      });
-      ref.invalidate(inboxNotifierProvider);
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Document updated')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update: ${friendlyApiMessage(e)}')),
-        );
-        setState(() => _saving = false);
-      }
-    }
-  }
-
-  Future<void> _removeFromInbox() async {
-    setState(() => _saving = true);
-    try {
-      await ref
-          .read(inboxNotifierProvider.notifier)
-          .removeFromInbox(widget.document);
-      if (mounted) Navigator.pop(context);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to remove: ${friendlyApiMessage(e)}')),
-        );
-        setState(() => _saving = false);
-      }
-    }
+  static String _fieldValue(dynamic value, CustomField def) {
+    if (value == null) return '—';
+    if (def.dataType == 'boolean') return value == true ? 'Ja' : 'Nein';
+    return displayCustomFieldValue(value, def.dataType,
+        extraData: def.extraData);
   }
 }
 

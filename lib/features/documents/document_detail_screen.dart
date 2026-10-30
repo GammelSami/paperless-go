@@ -33,6 +33,7 @@ import 'metadata_patch.dart';
 import '../inbox/inbox_notifier.dart';
 import '../../core/api/api_error_mapper.dart';
 import '../ai_chat/native_chat_providers.dart';
+import '../../shared/format.dart';
 
 class DocumentDetailScreen extends ConsumerStatefulWidget {
   final int documentId;
@@ -290,7 +291,7 @@ class _DocumentDetailScreenState extends ConsumerState<DocumentDetailScreen> {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        'Scanned ${DateFormat.yMMMd().format(doc.added!)}',
+                        'Scanned ${dateFormatDe.format(doc.added!)}',
                         style: Theme.of(context)
                             .textTheme
                             .bodySmall
@@ -1037,7 +1038,7 @@ class _MetadataSummaryCard extends StatelessWidget {
                 Icons.calendar_today_outlined,
                 'Created',
                 created != null
-                    ? DateFormat.yMMMd().format(created!)
+                    ? dateFormatDe.format(created!)
                     : null),
             if (tags.isNotEmpty) ...[
               const SizedBox(height: Spacing.sm),
@@ -1247,12 +1248,12 @@ String displayCustomFieldValue(dynamic val, String type,
   if (type == 'boolean') return val == true ? 'Yes' : 'No';
   if (type == 'date' && val is String && val.isNotEmpty) {
     try {
-      return DateFormat.yMMMd().format(DateTime.parse(val));
+      return dateFormatDe.format(DateTime.parse(val));
     } catch (_) {
       return val;
     }
   }
-  if (type == 'monetary') return '\$${val.toString()}';
+  if (type == 'monetary') return formatMoney(val);
   if (type == 'select') {
     final options = extraData?['select_options'] as List<dynamic>? ?? [];
     return _displaySelectValue(val, options);
@@ -1513,7 +1514,7 @@ class _NotesSection extends ConsumerWidget {
               children: notes.map((note) => Card(
                 child: ListTile(
                   title: Text(note.note),
-                  subtitle: Text(DateFormat.yMMMd().add_Hm().format(note.created)),
+                  subtitle: Text(DateFormat('dd.MM.yyyy HH:mm').format(note.created)),
                   trailing: IconButton(
                     icon: const Icon(Icons.delete_outline, size: 18),
                     onPressed: () async {
