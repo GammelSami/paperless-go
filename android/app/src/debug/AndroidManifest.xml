@@ -4,4 +4,6 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Fork: debug builds talk to a local http:// test Paperless -->
+    <application android:usesCleartextTraffic="true"/>
 </manifest>

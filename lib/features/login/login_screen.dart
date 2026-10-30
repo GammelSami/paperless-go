@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -38,7 +39,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _testConnection() async {
     final url = _normalizeUrl(_serverUrlController.text.trim());
-    if (url.isEmpty || url.startsWith('http://')) {
+    if (url.isEmpty || _blockHttp(url)) {
       setState(() {
         _connectionOk = false;
         _connectionReason = null;
@@ -67,6 +68,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       }
     }
   }
+
+  // Fork: debug builds may use plain http:// (local test server in the emulator)
+  bool _blockHttp(String url) => !kDebugMode && url.startsWith('http://');
 
   String _normalizeUrl(String url) {
     if (url.isEmpty) return '';
@@ -202,7 +206,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               !url.startsWith('https://')) {
                             return 'URL must start with https:// or http://';
                           }
-                          if (url.startsWith('http://')) {
+                          if (_blockHttp(url)) {
                             return 'This app requires https:// — plain http:// connections '
                                 'are blocked. Put your server behind a reverse proxy or '
                                 'Tailscale Serve for a valid HTTPS address.';
@@ -222,10 +226,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
 
                       // HTTP warning
-                      if (_serverUrlController.text
-                          .trim()
-                          .toLowerCase()
-                          .startsWith('http://'))
+                      if (_blockHttp(
+                          _serverUrlController.text.trim().toLowerCase()))
                         Padding(
                           padding: const EdgeInsets.only(top: Spacing.sm),
                           child: Row(
