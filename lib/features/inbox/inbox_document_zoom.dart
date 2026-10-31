@@ -123,6 +123,11 @@ class _InboxDocumentZoomState extends State<InboxDocumentZoom>
       _fitWidth,
       _sourcePage.width * 6,
     );
+    if (width <= _fitWidth && (width < _page.width || details.scale < 1)) {
+      _reset();
+      return;
+    }
+    final shrinking = width < _page.width;
     final scale = width / _gesturePage.width;
     final focalPoint = details.focalPoint - _overlayOrigin;
     final topLeft = focalPoint - (_focalPoint - _gesturePage.topLeft) * scale;
@@ -132,15 +137,20 @@ class _InboxDocumentZoomState extends State<InboxDocumentZoom>
       // Recentring or edge clamping here would move it away from the fingers.
       _page = topLeft & Size(width, height);
       // Unclip and dim as the fingers move, without a timed entry animation.
-      _reveal = math.max(
-        _reveal,
-        math
-            .max(
-              (details.scale - 1).abs() * 4,
-              (focalPoint - _focalPoint).distance / 80,
+      _reveal = shrinking
+          ? math.min(
+              _reveal,
+              ((width - _fitWidth) / _sourcePage.width * 2).clamp(0, 1),
             )
-            .clamp(0, 1),
-      );
+          : math.max(
+              _reveal,
+              math
+                  .max(
+                    (details.scale - 1).abs() * 2,
+                    (focalPoint - _focalPoint).distance / 160,
+                  )
+                  .clamp(0, 1),
+            );
     });
   }
 
