@@ -497,11 +497,11 @@ class _CardInfo extends ConsumerWidget {
 
     // Sideways label in a Stack (not IntrinsicHeight, which can't measure the
     // LayoutBuilder in the tag block): it spans exactly the details' height.
-    const labelWidth = 14.0;
+    const labelWidth = 16.0;
     return Stack(
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: labelWidth + _CardStyle.block),
+          padding: const EdgeInsets.only(left: labelWidth + Spacing.md),
           child: details,
         ),
         Positioned(
@@ -526,9 +526,11 @@ class _CardInfo extends ConsumerWidget {
                       docType,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
+                      // height 1: the line box must fit the 16-px column,
+                      // or descenders (the g in "Vertrag") get clipped.
                       style: _CardStyle.chip(
                         context,
-                      )?.copyWith(color: tokens.inkSoft),
+                      )?.copyWith(color: tokens.inkSoft, height: 1),
                     ),
                   ),
                 ),
