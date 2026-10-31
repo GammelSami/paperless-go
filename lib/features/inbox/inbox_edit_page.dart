@@ -47,7 +47,7 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
   final _correspondentMenu = MenuController();
   final _tagMenu = MenuController();
 
-  final Map<int, Offset> _pointerStarts = {};
+  final Map<int, (Offset, bool)> _pointerStarts = {};
   late final Future<List<DateTime>> _suggestedDates;
   bool _saving = false;
 
@@ -110,6 +110,7 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
         .where((d) => d.name == 'Frist' && d.dataType == 'date')
         .firstOrNull;
     const gap = SizedBox(height: Spacing.md);
+    final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
     return Scaffold(
       appBar: AppBar(title: const Text('Bearbeiten')),
       bottomNavigationBar: SafeArea(
@@ -236,8 +237,6 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
                         .toList(),
                     displayName: (t) => t.name,
                     leadingIcon: (t) => TagDot(tag: t, size: 20),
-                    // Match the menu's height so it stays above the keyboard.
-                    alignmentOffset: const Offset(0, -280),
                     onChanged: (t) {
                       if (t != null) setState(() => _tags.add(t.id));
                     },
@@ -272,6 +271,15 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
             gap,
             _customField(context, done),
           ],
+          // The dropdown needs one menu-height of scroll room while the
+          // keyboard is visible. No extra scroll extent remains afterward.
+          AnimatedContainer(
+            duration: keyboardOpen
+                ? Duration.zero
+                : const Duration(milliseconds: 240),
+            curve: Curves.easeOutCubic,
+            height: keyboardOpen ? 280 : 0,
+          ),
         ],
       ),
     );
@@ -289,34 +297,54 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
       if (menuController == null) return child;
       return Listener(
         onPointerDown: (event) {
-          _pointerStarts[event.pointer] = event.localPosition;
+          _pointerStarts[event.pointer] = (
+            event.localPosition,
+            menuController.isOpen,
+          );
         },
         onPointerCancel: (event) {
           _pointerStarts.remove(event.pointer);
         },
         onPointerUp: (event) {
           final start = _pointerStarts.remove(event.pointer);
-          if (start == null || (event.localPosition - start).distance > 8) return;
-          if (ignoreLeadingTap && start.dx < 40) return;
-          if (menuController.isOpen) return;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (start == null || (event.localPosition - start.$1).distance > 8) {
+            return;
+          }
+          if (ignoreLeadingTap && start.$1.dx < 40) return;
+          if (start.$2) return;
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
             if (!fieldContext.mounted) return;
             menuController.close();
-            Scrollable.ensureVisible(
+            await _waitForKeyboard();
+            if (!fieldContext.mounted) return;
+            await Scrollable.ensureVisible(
               fieldContext,
-              alignment: 0.05,
-              alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtStart,
+              alignment: 0,
               duration: const Duration(milliseconds: 200),
               curve: Curves.easeOutCubic,
-            ).then((_) {
-              if (fieldContext.mounted) menuController.open();
-            });
+            );
+            if (fieldContext.mounted) menuController.open();
           });
         },
         child: child,
       );
     },
   );
+
+  Future<void> _waitForKeyboard() async {
+    var last = MediaQuery.viewInsetsOf(context).bottom;
+    var stableFrames = 0;
+    for (var i = 0; i < 40 && mounted; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      if (!mounted) return;
+      final inset = MediaQuery.viewInsetsOf(context).bottom;
+      stableFrames = inset > 0 && (inset - last).abs() < 1
+          ? stableFrames + 1
+          : 0;
+      if (stableFrames >= 2) return;
+      last = inset;
+    }
+  }
 
   Future<void> _createTag(String name) async {
     try {
