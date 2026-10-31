@@ -19,7 +19,7 @@ import '../../shared/widgets/stamp_chip.dart';
 import '../../shared/widgets/tag_chip.dart';
 import '../documents/document_detail_screen.dart' show displayCustomFieldValue;
 import '../scanner/processing/metadata_matcher.dart';
-import 'inbox_edit_sheet.dart';
+import 'inbox_edit_page.dart';
 import 'inbox_notifier.dart';
 import '../upload_queue/queue_status_banner.dart';
 
@@ -277,12 +277,9 @@ class _CardStackState extends ConsumerState<_CardStack>
   }
 
   void _openEditSheet(Document doc) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      // Above the bottom navigation, so the OK button is never hidden.
-      useRootNavigator: true,
-      builder: (_) => InboxEditSheet(document: doc),
+    // Full page above the bottom navigation; predictive back animates it.
+    Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute<void>(builder: (_) => InboxEditPage(document: doc)),
     );
   }
 }

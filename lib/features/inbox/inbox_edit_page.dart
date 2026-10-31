@@ -15,22 +15,22 @@ import '../../shared/error_banner.dart';
 import '../../shared/format.dart';
 import '../../shared/widgets/metadata_dropdown.dart';
 import '../../shared/widgets/tag_chip.dart';
-import '../../shared/widgets/tag_picker_sheet.dart';
 import 'inbox_notifier.dart';
 
-/// Fork: quick edit for every field the AI fills (also when it left one
+/// Fork: quick edit page for every field the AI fills (also when it left one
 /// empty), in the card's order, with Paperless' date suggestions under each
-/// date field. "OK" saves; accepting stays on the card.
-class InboxEditSheet extends ConsumerStatefulWidget {
-  const InboxEditSheet({super.key, required this.document});
+/// date field. "OK" saves; accepting stays on the card. A full page (not a
+/// sheet), so Android's predictive back gesture animates it.
+class InboxEditPage extends ConsumerStatefulWidget {
+  const InboxEditPage({super.key, required this.document});
 
   final Document document;
 
   @override
-  ConsumerState<InboxEditSheet> createState() => _InboxEditSheetState();
+  ConsumerState<InboxEditPage> createState() => _InboxEditPageState();
 }
 
-class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
+class _InboxEditPageState extends ConsumerState<InboxEditPage> {
   late final TextEditingController _title;
   late final TextEditingController _date;
   int? _correspondentId;
@@ -39,6 +39,9 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
   late List<int> _tags;
   final Map<int, dynamic> _fieldValues = {};
   final Map<int, TextEditingController> _fieldText = {};
+
+  /// Amount sign per monetary field (true = minus = you pay).
+  final Map<int, bool> _negative = {};
   late final Future<List<DateTime>> _suggestedDates;
   bool _saving = false;
 
@@ -95,18 +98,12 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
 
     // Card order: type (it sits beside the title there), title, category /
     // correspondent, amount-like fields, tags, then the dates.
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.9,
-        maxChildSize: 0.95,
-        builder: (context, scroll) => ListView(
-          controller: scroll,
-          padding: const EdgeInsets.all(Spacing.lg),
-          children: [
-            Text('Bearbeiten', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: Spacing.lg),
+    return Scaffold(
+      appBar: AppBar(title: const Text('Bearbeiten')),
+      body: ListView(
+        padding: const EdgeInsets.all(Spacing.lg),
+        children: [
+          _keepVisible(
             MetadataDropdown<DocumentType>(
               label: 'Typ',
               value: docTypes[_documentTypeId],
@@ -114,9 +111,11 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
               displayName: (dt) => dt.name,
               onChanged: (dt) => setState(() => _documentTypeId = dt?.id),
             ),
-            gap,
-            // Grows with the title, never cut off; no line breaks, so no
-            // empty lines (Enter closes the keyboard instead).
+          ),
+          gap,
+          // Grows with the title, never cut off; no line breaks, so no
+          // empty lines (Enter closes the keyboard instead).
+          _keepVisible(
             TextField(
               controller: _title,
               decoration: const InputDecoration(labelText: 'Titel'),
@@ -126,7 +125,9 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
               textInputAction: TextInputAction.done,
               inputFormatters: [FilteringTextInputFormatter.deny('\n')],
             ),
-            gap,
+          ),
+          gap,
+          _keepVisible(
             MetadataDropdown<StoragePath>(
               label: 'Kategorie',
               value: storagePaths[_storagePathId],
@@ -134,7 +135,9 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
               displayName: (sp) => sp.name,
               onChanged: (sp) => setState(() => _storagePathId = sp?.id),
             ),
-            gap,
+          ),
+          gap,
+          _keepVisible(
             MetadataDropdown<Correspondent>(
               label: 'Absender',
               value: correspondents[_correspondentId],
@@ -142,51 +145,65 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
               displayName: (c) => c.name,
               onChanged: (c) => setState(() => _correspondentId = c?.id),
             ),
-            // Amount and done side by side, a little faded: secondary info,
-            // like the small chips on the card.
-            if (fields.any((d) => d.dataType != 'date')) ...[
-              gap,
-              Opacity(
-                opacity: 0.8,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children:
-                      [
-                            for (final def in fields)
-                              if (def.dataType != 'date')
-                                def.dataType == 'boolean'
-                                    ? _customField(context, def)
-                                    : Expanded(
-                                        child: _customField(context, def),
+          ),
+          // Amount and done side by side, a little faded: secondary info,
+          // like the small chips on the card.
+          if (fields.any((d) => d.dataType != 'date')) ...[
+            gap,
+            Opacity(
+              opacity: 0.8,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children:
+                    [
+                          for (final def in fields)
+                            if (def.dataType != 'date')
+                              def.dataType == 'boolean'
+                                  ? _customField(context, def)
+                                  : Expanded(
+                                      child: _keepVisible(
+                                        _customField(context, def),
                                       ),
-                          ]
-                          .expand((w) => [w, const SizedBox(width: Spacing.md)])
-                          .toList()
-                        ..removeLast(),
-                ),
+                                    ),
+                        ]
+                        .expand((w) => [w, const SizedBox(width: Spacing.md)])
+                        .toList()
+                      ..removeLast(),
               ),
-            ],
-            gap,
-            Text('Tags', style: Theme.of(context).textTheme.bodySmall),
-            const SizedBox(height: Spacing.xs),
-            Wrap(
-              spacing: Spacing.xs,
-              runSpacing: Spacing.xs,
-              children: [
-                for (final id in shownTags) _tagChip(context, tags[id], id),
-                ActionChip(
-                  avatar: const Icon(Icons.add, size: 18),
-                  label: const Text('Tag'),
-                  onPressed: () => _pickTag(
-                    context,
-                    tags.values
-                        .where((t) => !t.isInboxTag && !_tags.contains(t.id))
-                        .toList(),
-                  ),
-                ),
-              ],
             ),
-            gap,
+          ],
+          gap,
+          Wrap(
+            spacing: Spacing.xs,
+            runSpacing: Spacing.xs,
+            children: [
+              for (final id in shownTags) _tagChip(context, tags[id], id),
+            ],
+          ),
+          // Search right in the field, no extra popup; hidden when every
+          // tag is already on the document.
+          if (tags.values.any(
+            (t) => !t.isInboxTag && !_tags.contains(t.id),
+          )) ...[
+            const SizedBox(height: Spacing.sm),
+            _keepVisible(
+              MetadataDropdown<Tag>(
+                key: ValueKey(_tags.length),
+                label: 'Tag hinzufügen',
+                value: null,
+                emptyLabel: '',
+                items: tags.values
+                    .where((t) => !t.isInboxTag && !_tags.contains(t.id))
+                    .toList(),
+                displayName: (t) => t.name,
+                onChanged: (t) {
+                  if (t != null) setState(() => _tags.add(t.id));
+                },
+              ),
+            ),
+          ],
+          gap,
+          _keepVisible(
             _dateField(
               context,
               _date,
@@ -194,23 +211,39 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
               icon: Icons.description_outlined,
               onPicked: (d) => setState(() => _date.text = formatDate(d)),
             ),
-            _suggestions(_date),
-            for (final def in fields)
-              if (def.dataType == 'date') ...[
-                gap,
-                _customField(context, def),
-                _suggestions(_textFor(def.id, _initialDate(def.id))),
-              ],
-            const SizedBox(height: Spacing.lg),
-            FilledButton(
-              onPressed: _saving ? null : _save,
-              child: const Text('OK'),
-            ),
-          ],
-        ),
+          ),
+          _suggestions(_date),
+          for (final def in fields)
+            if (def.dataType == 'date') ...[
+              gap,
+              _keepVisible(_customField(context, def)),
+              _suggestions(_textFor(def.id, _initialDate(def.id))),
+            ],
+          const SizedBox(height: Spacing.lg),
+          FilledButton(
+            onPressed: _saving ? null : _save,
+            child: const Text('OK'),
+          ),
+          // Room below the last field, so even the date fields can be
+          // scrolled up near the top above a tall keyboard.
+          SizedBox(height: MediaQuery.sizeOf(context).height * 0.45),
+        ],
       ),
     );
   }
+
+  /// On touch, scroll the field near the top before anything opens: the
+  /// keyboard then never covers it and suggestion lists have room below.
+  /// (Scrolling after a dropdown opened would close it again.)
+  Widget _keepVisible(Widget child) => Builder(
+    builder: (fieldContext) => Listener(
+      // A jump, not an animation: the touch itself would cancel a scroll
+      // animation (it "holds" the list).
+      onPointerDown: (_) =>
+          Scrollable.ensureVisible(fieldContext, alignment: 0.02),
+      child: child,
+    ),
+  );
 
   /// The document's own custom fields plus the empty AI fields, AI fields
   /// first in DocSort's order.
@@ -351,17 +384,38 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
           onPicked: (d) => setState(() => controller.text = formatDate(d)),
         );
       case 'monetary':
+        // Sign is a button (tap to flip); the field holds the amount only.
+        final negative = _negative.putIfAbsent(
+          def.id,
+          () => value != null && formatMoney(value).startsWith('-'),
+        );
         final shown = value == null
             ? ''
-            : formatMoney(value).replaceAll(' €', '').replaceAll('+', '');
+            : formatMoney(
+                value,
+              ).replaceAll(' €', '').replaceAll('+', '').replaceAll('-', '');
         return TextField(
           controller: _textFor(def.id, shown),
-          keyboardType: const TextInputType.numberWithOptions(
-            decimal: true,
-            signed: true,
-          ),
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
           decoration: _dense(
-            InputDecoration(labelText: def.name, suffixText: '€'),
+            InputDecoration(
+              labelText: def.name,
+              suffixText: '€',
+              prefixIcon: IconButton(
+                tooltip: negative
+                    ? 'Minus: du zahlst (tippen für Plus)'
+                    : 'Plus: du bekommst (tippen für Minus)',
+                visualDensity: VisualDensity.compact,
+                onPressed: () => setState(() {
+                  _negative[def.id] = !negative;
+                  _fieldValues.putIfAbsent(def.id, () => null);
+                }),
+                icon: Text(
+                  negative ? '−' : '+',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+            ),
           ),
         );
       case 'string':
@@ -379,20 +433,6 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
           subtitle: Text(value?.toString() ?? '—'),
         );
     }
-  }
-
-  void _pickTag(BuildContext context, List<Tag> available) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (sheetContext) => TagPickerSheet(
-        tags: available,
-        onSelected: (tag) {
-          setState(() => _tags.add(tag.id));
-          Navigator.pop(sheetContext);
-        },
-      ),
-    );
   }
 
   /// Builds the PATCH body. Returns null and shows a message on bad input.
@@ -426,11 +466,12 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
               if (t.isEmpty) {
                 value = null;
               } else {
-                final n = double.tryParse(t);
+                final n = double.tryParse(t)?.abs();
                 if (n == null) {
                   throw FormatException('${def.name}: keine Zahl');
                 }
-                value = 'EUR${n.toStringAsFixed(2)}';
+                final signed = (_negative[id] ?? false) ? -n : n;
+                value = 'EUR${signed.toStringAsFixed(2)}';
               }
             case 'integer':
               value = int.tryParse(text.trim());

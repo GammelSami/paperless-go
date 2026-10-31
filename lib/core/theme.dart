@@ -138,6 +138,13 @@ class AppTheme {
       useMaterial3: true,
       colorScheme: scheme,
       textTheme: textTheme,
+      // Fork: Android predictive back — the page follows the back swipe and
+      // slides back in if the swipe is cancelled.
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
+        },
+      ),
       scaffoldBackgroundColor: tokens.paper,
       dividerColor: tokens.line,
       extensions: [tokens],

@@ -22,7 +22,8 @@ void main() {
       );
 
       expect(tester.takeException(), isNull);
-      expect(find.text('Keine Angabe'), findsOneWidget);
+      final field = tester.widget<TextField>(find.byType(TextField));
+      expect(field.controller!.text, 'Keine Angabe');
     });
 
     testWidgets('selecting an item invokes onChanged', (tester) async {
@@ -41,7 +42,7 @@ void main() {
         ),
       );
 
-      await tester.tap(find.text('Apple')); // open the menu
+      await tester.tap(find.byType(TextField)); // open the menu
       await tester.pumpAndSettle();
       await tester.tap(find.text('Banana').last); // pick a different item
       await tester.pumpAndSettle();
@@ -64,9 +65,11 @@ void main() {
         ),
       );
 
-      // Fork: the field opens a search sheet on tap; disabled = no tap.
-      final tap = tester.widget<InkWell>(find.byType(InkWell).first);
-      expect(tap.onTap, isNull);
+      // Fork: an inline-searchable DropdownMenu; disabled = not enabled.
+      final menu = tester.widget<DropdownMenu<String?>>(
+        find.byType(DropdownMenu<String?>),
+      );
+      expect(menu.enabled, isFalse);
     });
   });
 }

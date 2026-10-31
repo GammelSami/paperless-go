@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 /// entry represents the null selection.
 ///
 /// Shared by the document detail, inbox quick-assign, and upload screens.
-class MetadataDropdown<T> extends StatelessWidget {
+class MetadataDropdown<T> extends StatefulWidget {
   final String label;
   final T? value;
   final List<T> items;
@@ -20,6 +20,10 @@ class MetadataDropdown<T> extends StatelessWidget {
   /// Optional decoration suffix, e.g. an "AI suggested" badge.
   final Widget? suffix;
 
+  /// Text of the "nothing selected" entry. Empty = no such entry (e.g. an
+  /// "add tag" field that resets after every pick).
+  final String emptyLabel;
+
   const MetadataDropdown({
     super.key,
     required this.label,
@@ -28,139 +32,107 @@ class MetadataDropdown<T> extends StatelessWidget {
     required this.displayName,
     required this.onChanged,
     this.suffix,
+    this.emptyLabel = 'Keine Angabe',
   });
 
   @override
+  State<MetadataDropdown<T>> createState() => _MetadataDropdownState<T>();
+}
+
+class _MetadataDropdownState<T> extends State<MetadataDropdown<T>> {
+  final _controller = TextEditingController();
+  final _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    // Select the current text on focus: typing then replaces it and filters
+    // right away instead of appending to the old name.
+    _focus.addListener(() {
+      if (_focus.hasFocus) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _controller.selection = TextSelection(
+            baseOffset: 0,
+            extentOffset: _controller.text.length,
+          );
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final w = widget;
+    final value = w.value;
+    final items = w.items;
+    final displayName = w.displayName;
+    final emptyLabel = w.emptyLabel;
+    final onChanged = w.onChanged;
+    final suffix = w.suffix;
+    final label = w.label;
     // Guard: if value is not in items, treat as null.
-    final effectiveValue = (value != null && items.contains(value))
+    final T? effectiveValue = (value != null && items.contains(value))
         ? value
         : null;
-    final text = Theme.of(context).textTheme.bodyLarge;
+    final sorted = [...items]
+      ..sort(
+        (a, b) =>
+            displayName(a).toLowerCase().compareTo(displayName(b).toLowerCase()),
+      );
+    final entries = <DropdownMenuEntry<T?>>[
+      if (emptyLabel.isNotEmpty)
+        DropdownMenuEntry<T?>(value: null, label: emptyLabel),
+      for (final item in sorted)
+        DropdownMenuEntry<T?>(value: item, label: displayName(item)),
+    ];
+    final selectedLabel = effectiveValue == null
+        ? emptyLabel
+        : displayName(effectiveValue as T);
 
-    // Fork: a tap opens a searchable list instead of a plain dropdown menu
-    // (long correspondent lists), and the value is set in regular weight.
-    return InkWell(
-      onTap: onChanged == null ? null : () => _pick(context, effectiveValue),
-      borderRadius: BorderRadius.circular(16),
-      child: InputDecorator(
-        isEmpty: false,
-        decoration: InputDecoration(
-          labelText: label,
+    // Fork: type right in the field to filter (no separate popup), regular
+    // weight, same height as the other compact fields.
+    return LayoutBuilder(
+      builder: (context, box) => DropdownMenu<T?>(
+        controller: _controller,
+        focusNode: _focus,
+        initialSelection: effectiveValue,
+        label: Text(label),
+        enabled: onChanged != null,
+        enableFilter: true,
+        enableSearch: true,
+        requestFocusOnTap: true,
+        width: box.maxWidth,
+        menuHeight: 280,
+        textStyle: Theme.of(context).textTheme.bodyLarge,
+        trailingIcon: suffix,
+        // App field style (white fill, rounded), compact like the others.
+        inputDecorationTheme: Theme.of(context).inputDecorationTheme.copyWith(
+          isDense: true,
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 12,
             vertical: 8,
           ),
-          isDense: true,
-          enabled: onChanged != null,
-          suffix: suffix,
-          suffixIcon: const Icon(Icons.arrow_drop_down),
+          constraints: const BoxConstraints(maxHeight: 52),
         ),
-        child: Text(
-          effectiveValue == null ? 'Keine Angabe' : displayName(effectiveValue),
-          style: effectiveValue == null
-              ? text?.copyWith(color: Theme.of(context).hintColor)
-              : text,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ),
-    );
-  }
-
-  Future<void> _pick(BuildContext context, T? current) async {
-    final picked = await showModalBottomSheet<_Picked<T>>(
-      context: context,
-      isScrollControlled: true,
-      useRootNavigator: true,
-      builder: (_) => _SearchSheet<T>(
-        label: label,
-        items: items,
-        current: current,
-        displayName: displayName,
-      ),
-    );
-    if (picked != null) onChanged?.call(picked.value);
-  }
-}
-
-/// Wraps the choice so "Keine Angabe" (null) differs from "closed the sheet".
-class _Picked<T> {
-  const _Picked(this.value);
-  final T? value;
-}
-
-class _SearchSheet<T> extends StatefulWidget {
-  const _SearchSheet({
-    required this.label,
-    required this.items,
-    required this.current,
-    required this.displayName,
-  });
-
-  final String label;
-  final List<T> items;
-  final T? current;
-  final String Function(T) displayName;
-
-  @override
-  State<_SearchSheet<T>> createState() => _SearchSheetState<T>();
-}
-
-class _SearchSheetState<T> extends State<_SearchSheet<T>> {
-  String _query = '';
-
-  @override
-  Widget build(BuildContext context) {
-    final q = _query.toLowerCase();
-    final shown =
-        [
-          for (final item in widget.items)
-            if (widget.displayName(item).toLowerCase().contains(q)) item,
-        ]..sort(
-          (a, b) => widget
-              .displayName(a)
-              .toLowerCase()
-              .compareTo(widget.displayName(b).toLowerCase()),
-        );
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: SizedBox(
-        height: MediaQuery.sizeOf(context).height * 0.7,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: TextField(
-                autofocus: true,
-                decoration: InputDecoration(
-                  labelText: '${widget.label} suchen',
-                  prefixIcon: const Icon(Icons.search),
-                  isDense: true,
-                ),
-                onChanged: (v) => setState(() => _query = v),
-              ),
-            ),
-            Expanded(
-              child: ListView(
-                children: [
-                  if (q.isEmpty)
-                    ListTile(
-                      title: const Text('Keine Angabe'),
-                      selected: widget.current == null,
-                      onTap: () => Navigator.pop(context, _Picked<T>(null)),
-                    ),
-                  for (final item in shown)
-                    ListTile(
-                      title: Text(widget.displayName(item)),
-                      selected: item == widget.current,
-                      onTap: () => Navigator.pop(context, _Picked<T>(item)),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
+        // Show everything while the field still holds the current choice;
+        // filter only once the user types something else.
+        filterCallback: (entries, text) {
+          final q = text.trim().toLowerCase();
+          if (q.isEmpty || text == selectedLabel) return entries;
+          return [
+            for (final e in entries)
+              if (e.value != null && e.label.toLowerCase().contains(q)) e,
+          ];
+        },
+        dropdownMenuEntries: entries,
+        onSelected: onChanged,
       ),
     );
   }
