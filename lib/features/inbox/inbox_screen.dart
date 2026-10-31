@@ -54,31 +54,6 @@ class InboxScreen extends ConsumerWidget {
           children: [
             // Renders nothing unless an upload has actually stopped trying.
             const QueueStatusBanner(),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                Spacing.xl,
-                0,
-                Spacing.md,
-                0,
-              ),
-              child: Row(
-                children: [
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.search),
-                    tooltip: 'Search',
-                    iconSize: 26,
-                    onPressed: () => context.push('/search'),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.settings_outlined),
-                    tooltip: 'Settings',
-                    iconSize: 26,
-                    onPressed: () => context.push('/settings'),
-                  ),
-                ],
-              ),
-            ),
             Expanded(
               child: inboxState.when(
                 loading: () => const _StackSkeleton(),
