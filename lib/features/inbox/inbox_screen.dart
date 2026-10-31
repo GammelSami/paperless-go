@@ -669,7 +669,11 @@ class _PackedTags extends StatelessWidget {
                 padding: EdgeInsets.only(top: j == 0 ? 0 : _CardStyle.gap),
                 child: Row(
                   children: [
-                    for (final (i, t) in lines[j].indexed) ...[
+                    // Every second line runs short-to-long, so the long
+                    // pills don't all pile up on the left.
+                    for (final (i, t)
+                        in (j.isOdd ? lines[j].reversed : lines[j])
+                            .indexed) ...[
                       if (i > 0) SizedBox(width: space),
                       InboxTagChip(tag: t, hPad: space),
                     ],
