@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_error_mapper.dart';
@@ -92,8 +93,8 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
     final fields = _shownFields(fieldDefs);
     const gap = SizedBox(height: Spacing.md);
 
-    // Same order as the inbox card: title, category / correspondent, type,
-    // amount-like fields, tags, then the dates.
+    // Card order: type (it sits beside the title there), title, category /
+    // correspondent, amount-like fields, tags, then the dates.
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: DraggableScrollableSheet(
@@ -106,10 +107,24 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
           children: [
             Text('Bearbeiten', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: Spacing.lg),
+            MetadataDropdown<DocumentType>(
+              label: 'Typ',
+              value: docTypes[_documentTypeId],
+              items: docTypes.values.toList(),
+              displayName: (dt) => dt.name,
+              onChanged: (dt) => setState(() => _documentTypeId = dt?.id),
+            ),
+            gap,
+            // Grows with the title, never cut off; no line breaks, so no
+            // empty lines (Enter closes the keyboard instead).
             TextField(
               controller: _title,
               decoration: const InputDecoration(labelText: 'Titel'),
+              minLines: 1,
               maxLines: null,
+              keyboardType: TextInputType.text,
+              textInputAction: TextInputAction.done,
+              inputFormatters: [FilteringTextInputFormatter.deny('\n')],
             ),
             gap,
             MetadataDropdown<StoragePath>(
@@ -126,14 +141,6 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
               items: correspondents.values.toList(),
               displayName: (c) => c.name,
               onChanged: (c) => setState(() => _correspondentId = c?.id),
-            ),
-            gap,
-            MetadataDropdown<DocumentType>(
-              label: 'Typ',
-              value: docTypes[_documentTypeId],
-              items: docTypes.values.toList(),
-              displayName: (dt) => dt.name,
-              onChanged: (dt) => setState(() => _documentTypeId = dt?.id),
             ),
             for (final def in fields)
               if (def.dataType != 'date') ...[gap, _customField(context, def)],
@@ -233,17 +240,15 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
 
   /// Tag in its Paperless colour, same look as on the inbox card.
   Widget _tagChip(BuildContext context, Tag? tag, int id) {
-    final ink = Theme.of(context).colorScheme.onSurface;
-    final c =
-        TagChip.parseColor(tag?.colour) ??
-        Theme.of(context).colorScheme.secondary;
+    final c = TagChip.colorOf(context, tag);
+    final fg = TagChip.textColor(context, c);
     return InputChip(
       label: Text(tag?.name ?? '#$id'),
-      labelStyle: TextStyle(color: Color.lerp(ink, c, 0.3)),
-      backgroundColor: c.withValues(alpha: 0.08),
-      side: BorderSide(color: c.withValues(alpha: 0.55), width: 1.2),
+      labelStyle: TextStyle(color: fg),
+      backgroundColor: TagChip.fill(c),
+      side: BorderSide(color: TagChip.outline(c), width: TagChip.outlineWidth),
       shape: const StadiumBorder(),
-      deleteIconColor: Color.lerp(ink, c, 0.3),
+      deleteIconColor: fg,
       onDeleted: () => setState(() => _tags.remove(id)),
     );
   }
@@ -280,11 +285,12 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
     final value = _fieldValues[def.id];
     switch (def.dataType) {
       case 'boolean':
-        return SwitchListTile(
+        return CheckboxListTile(
           contentPadding: EdgeInsets.zero,
+          controlAffinity: ListTileControlAffinity.leading,
           title: Text(def.name),
           value: value == true,
-          onChanged: (v) => setState(() => _fieldValues[def.id] = v),
+          onChanged: (v) => setState(() => _fieldValues[def.id] = v ?? false),
         );
       case 'date':
         final controller = _textFor(def.id, _initialDate(def.id));

@@ -402,7 +402,10 @@ class _InboxCard extends ConsumerWidget {
                         onPressed: onEdit,
                         tooltip: 'Bearbeiten',
                         iconSize: 28,
-                        icon: Icon(Icons.edit_outlined, color: tokens.stamp),
+                        icon: Icon(
+                          Icons.edit,
+                          color: tokens.stamp.withValues(alpha: 0.85),
+                        ),
                       ),
                       Expanded(
                         child: InkWell(
@@ -711,10 +714,7 @@ class InboxTagChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ink = Theme.of(context).colorScheme.onSurface;
-    final c =
-        TagChip.parseColor(tag.colour) ??
-        Theme.of(context).colorScheme.secondary;
+    final c = TagChip.colorOf(context, tag);
     return Semantics(
       label: '${tag.name} tag',
       child: Container(
@@ -723,11 +723,8 @@ class InboxTagChip extends StatelessWidget {
           vertical: _CardStyle.chipPadV,
         ),
         decoration: BoxDecoration(
-          color: c.withValues(alpha: 0.08),
-          border: Border.all(
-            color: c.withValues(alpha: 0.55),
-            width: borderWidth,
-          ),
+          color: TagChip.fill(c),
+          border: Border.all(color: TagChip.outline(c), width: borderWidth),
           borderRadius: BorderRadius.circular(Radii.pill),
         ),
         child: Text(
@@ -735,7 +732,9 @@ class InboxTagChip extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
-          style: textStyle(context)?.copyWith(color: Color.lerp(ink, c, 0.3)),
+          style: textStyle(
+            context,
+          )?.copyWith(color: TagChip.textColor(context, c)),
         ),
       ),
     );

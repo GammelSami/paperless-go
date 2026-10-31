@@ -9,24 +9,23 @@ class TagChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bgColor = parseColor(tag.colour) ??
-        Theme.of(context).colorScheme.secondaryContainer;
-    final fgColor = bgColor.computeLuminance() > 0.5
-        ? Colors.black87
-        : Colors.white;
-
+    final c = colorOf(context, tag);
     return Semantics(
       label: '${tag.name} tag',
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: Spacing.sm, vertical: 3),
+        padding: const EdgeInsets.symmetric(
+          horizontal: Spacing.sm,
+          vertical: 2,
+        ),
         decoration: BoxDecoration(
-          color: bgColor,
+          color: fill(c),
+          border: Border.all(color: outline(c), width: outlineWidth),
           borderRadius: BorderRadius.circular(Radii.pill),
         ),
         child: Text(
           tag.name,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: fgColor,
+            color: textColor(context, c),
             fontWeight: FontWeight.w500,
           ),
           maxLines: 1,
@@ -35,6 +34,21 @@ class TagChip extends StatelessWidget {
       ),
     );
   }
+
+  // Fork: one subtle tag look everywhere (Sam liked it on the inbox card):
+  // outline in the tag colour, a faint tint inside, ink text with a touch of
+  // the tag colour, so every tag stays readable.
+  static const outlineWidth = 1.2;
+
+  static Color colorOf(BuildContext context, Tag? tag) =>
+      parseColor(tag?.colour) ?? Theme.of(context).colorScheme.secondary;
+
+  static Color fill(Color c) => c.withValues(alpha: 0.08);
+
+  static Color outline(Color c) => c.withValues(alpha: 0.55);
+
+  static Color textColor(BuildContext context, Color c) =>
+      Color.lerp(Theme.of(context).colorScheme.onSurface, c, 0.3)!;
 
   /// Compute a contrasting text color for a given background color.
   static Color contrastColor(Color bg) {
@@ -65,6 +79,28 @@ class TagChip extends StatelessWidget {
   }
 }
 
+/// Fork: small round marker in the subtle tag look (lists, pickers).
+class TagDot extends StatelessWidget {
+  const TagDot({super.key, required this.tag, this.size = 24});
+
+  final Tag tag;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = TagChip.colorOf(context, tag);
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: TagChip.fill(c),
+        border: Border.all(color: TagChip.outline(c), width: 2),
+      ),
+    );
+  }
+}
+
 class TagOverflowChip extends StatelessWidget {
   final int count;
   const TagOverflowChip({super.key, required this.count});
@@ -74,7 +110,10 @@ class TagOverflowChip extends StatelessWidget {
     return Semantics(
       label: '$count more tags',
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: Spacing.sm, vertical: 3),
+        padding: const EdgeInsets.symmetric(
+          horizontal: Spacing.sm,
+          vertical: 3,
+        ),
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(Radii.pill),

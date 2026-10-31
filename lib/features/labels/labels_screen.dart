@@ -60,7 +60,10 @@ class _TagsTab extends ConsumerWidget {
           children: [
             const Icon(Icons.error_outline, size: 48),
             const SizedBox(height: 16),
-            Text('Failed to load\n${friendlyApiMessage(err)}', textAlign: TextAlign.center),
+            Text(
+              'Failed to load\n${friendlyApiMessage(err)}',
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 16),
             FilledButton.tonal(
               onPressed: () => ref.invalidate(tagsProvider),
@@ -78,18 +81,15 @@ class _TagsTab extends ConsumerWidget {
               ? const EmptyState(
                   icon: Icons.label_outline,
                   title: 'No tags',
-                  description: 'Tags help you organize and find documents quickly',
+                  description:
+                      'Tags help you organize and find documents quickly',
                 )
               : ListView.builder(
                   itemCount: sorted.length,
                   itemBuilder: (_, i) {
                     final tag = sorted[i];
                     return ListTile(
-                      leading: CircleAvatar(
-                        radius: 14,
-                        backgroundColor: TagChip.parseColor(tag.colour) ??
-                            Theme.of(context).colorScheme.secondaryContainer,
-                      ),
+                      leading: TagDot(tag: tag, size: 28),
                       title: Text(tag.name),
                       subtitle: Text('${tag.documentCount} documents'),
                       trailing: Row(
@@ -100,8 +100,11 @@ class _TagsTab extends ConsumerWidget {
                             onPressed: () => _editTag(context, ref, tag),
                           ),
                           IconButton(
-                            icon: Icon(Icons.delete_outline, size: 20,
-                                color: Theme.of(context).colorScheme.error),
+                            icon: Icon(
+                              Icons.delete_outline,
+                              size: 20,
+                              color: Theme.of(context).colorScheme.error,
+                            ),
                             onPressed: () => _deleteTag(context, ref, tag),
                           ),
                         ],
@@ -128,7 +131,9 @@ class _TagsTab extends ConsumerWidget {
 
   void _showTagDialog(BuildContext context, WidgetRef ref, Tag? existing) {
     final nameController = TextEditingController(text: existing?.name ?? '');
-    final colourController = TextEditingController(text: existing?.colour ?? '');
+    final colourController = TextEditingController(
+      text: existing?.colour ?? '',
+    );
 
     showDialog(
       context: context,
@@ -200,7 +205,9 @@ class _TagsTab extends ConsumerWidget {
               final success = await notifier.deleteTag(tag.id);
               if (!success && context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Delete failed: ${notifier.lastError}')),
+                  SnackBar(
+                    content: Text('Delete failed: ${notifier.lastError}'),
+                  ),
                 );
               }
             },
@@ -228,7 +235,10 @@ class _CorrespondentsTab extends ConsumerWidget {
           children: [
             const Icon(Icons.error_outline, size: 48),
             const SizedBox(height: 16),
-            Text('Failed to load\n${friendlyApiMessage(err)}', textAlign: TextAlign.center),
+            Text(
+              'Failed to load\n${friendlyApiMessage(err)}',
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 16),
             FilledButton.tonal(
               onPressed: () => ref.invalidate(correspondentsProvider),
@@ -254,9 +264,11 @@ class _CorrespondentsTab extends ConsumerWidget {
                     final corr = sorted[i];
                     return ListTile(
                       leading: CircleAvatar(
-                        child: Text(corr.name.isNotEmpty
-                            ? corr.name[0].toUpperCase()
-                            : '?'),
+                        child: Text(
+                          corr.name.isNotEmpty
+                              ? corr.name[0].toUpperCase()
+                              : '?',
+                        ),
                       ),
                       title: Text(corr.name),
                       subtitle: Text('${corr.documentCount} documents'),
@@ -269,8 +281,11 @@ class _CorrespondentsTab extends ConsumerWidget {
                                 _editCorrespondent(context, ref, corr),
                           ),
                           IconButton(
-                            icon: Icon(Icons.delete_outline, size: 20,
-                                color: Theme.of(context).colorScheme.error),
+                            icon: Icon(
+                              Icons.delete_outline,
+                              size: 20,
+                              color: Theme.of(context).colorScheme.error,
+                            ),
                             onPressed: () =>
                                 _deleteCorrespondent(context, ref, corr),
                           ),
@@ -293,19 +308,26 @@ class _CorrespondentsTab extends ConsumerWidget {
   }
 
   void _editCorrespondent(
-      BuildContext context, WidgetRef ref, Correspondent corr) {
+    BuildContext context,
+    WidgetRef ref,
+    Correspondent corr,
+  ) {
     _showCorrespondentDialog(context, ref, corr);
   }
 
   void _showCorrespondentDialog(
-      BuildContext context, WidgetRef ref, Correspondent? existing) {
+    BuildContext context,
+    WidgetRef ref,
+    Correspondent? existing,
+  ) {
     final nameController = TextEditingController(text: existing?.name ?? '');
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title:
-            Text(existing == null ? 'Create Correspondent' : 'Edit Correspondent'),
+        title: Text(
+          existing == null ? 'Create Correspondent' : 'Edit Correspondent',
+        ),
         content: TextField(
           controller: nameController,
           autofocus: true,
@@ -322,7 +344,9 @@ class _CorrespondentsTab extends ConsumerWidget {
               if (name.isEmpty) return;
               final notifier = ref.read(labelsNotifierProvider.notifier);
               final success = existing != null
-                  ? await notifier.updateCorrespondent(existing.id, {'name': name})
+                  ? await notifier.updateCorrespondent(existing.id, {
+                      'name': name,
+                    })
                   : await notifier.createCorrespondent({'name': name});
               if (ctx.mounted) Navigator.pop(ctx);
               if (!success && context.mounted) {
@@ -339,7 +363,10 @@ class _CorrespondentsTab extends ConsumerWidget {
   }
 
   void _deleteCorrespondent(
-      BuildContext context, WidgetRef ref, Correspondent corr) {
+    BuildContext context,
+    WidgetRef ref,
+    Correspondent corr,
+  ) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -357,7 +384,9 @@ class _CorrespondentsTab extends ConsumerWidget {
               final success = await notifier.deleteCorrespondent(corr.id);
               if (!success && context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Delete failed: ${notifier.lastError}')),
+                  SnackBar(
+                    content: Text('Delete failed: ${notifier.lastError}'),
+                  ),
                 );
               }
             },
@@ -385,7 +414,10 @@ class _DocumentTypesTab extends ConsumerWidget {
           children: [
             const Icon(Icons.error_outline, size: 48),
             const SizedBox(height: 16),
-            Text('Failed to load\n${friendlyApiMessage(err)}', textAlign: TextAlign.center),
+            Text(
+              'Failed to load\n${friendlyApiMessage(err)}',
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 16),
             FilledButton.tonal(
               onPressed: () => ref.invalidate(documentTypesProvider),
@@ -403,7 +435,8 @@ class _DocumentTypesTab extends ConsumerWidget {
               ? const EmptyState(
                   icon: Icons.description_outlined,
                   title: 'No document types',
-                  description: 'Categorize documents by type for easier filtering',
+                  description:
+                      'Categorize documents by type for easier filtering',
                 )
               : ListView.builder(
                   itemCount: sorted.length,
@@ -411,7 +444,8 @@ class _DocumentTypesTab extends ConsumerWidget {
                     final dt = sorted[i];
                     return ListTile(
                       leading: const CircleAvatar(
-                          child: Icon(Icons.description_outlined)),
+                        child: Icon(Icons.description_outlined),
+                      ),
                       title: Text(dt.name),
                       subtitle: Text('${dt.documentCount} documents'),
                       trailing: Row(
@@ -419,14 +453,15 @@ class _DocumentTypesTab extends ConsumerWidget {
                         children: [
                           IconButton(
                             icon: const Icon(Icons.edit_outlined, size: 20),
-                            onPressed: () =>
-                                _editDocType(context, ref, dt),
+                            onPressed: () => _editDocType(context, ref, dt),
                           ),
                           IconButton(
-                            icon: Icon(Icons.delete_outline, size: 20,
-                                color: Theme.of(context).colorScheme.error),
-                            onPressed: () =>
-                                _deleteDocType(context, ref, dt),
+                            icon: Icon(
+                              Icons.delete_outline,
+                              size: 20,
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                            onPressed: () => _deleteDocType(context, ref, dt),
                           ),
                         ],
                       ),
@@ -451,14 +486,18 @@ class _DocumentTypesTab extends ConsumerWidget {
   }
 
   void _showDocTypeDialog(
-      BuildContext context, WidgetRef ref, DocumentType? existing) {
+    BuildContext context,
+    WidgetRef ref,
+    DocumentType? existing,
+  ) {
     final nameController = TextEditingController(text: existing?.name ?? '');
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title:
-            Text(existing == null ? 'Create Document Type' : 'Edit Document Type'),
+        title: Text(
+          existing == null ? 'Create Document Type' : 'Edit Document Type',
+        ),
         content: TextField(
           controller: nameController,
           autofocus: true,
@@ -475,7 +514,9 @@ class _DocumentTypesTab extends ConsumerWidget {
               if (name.isEmpty) return;
               final notifier = ref.read(labelsNotifierProvider.notifier);
               final success = existing != null
-                  ? await notifier.updateDocumentType(existing.id, {'name': name})
+                  ? await notifier.updateDocumentType(existing.id, {
+                      'name': name,
+                    })
                   : await notifier.createDocumentType({'name': name});
               if (ctx.mounted) Navigator.pop(ctx);
               if (!success && context.mounted) {
@@ -509,7 +550,9 @@ class _DocumentTypesTab extends ConsumerWidget {
               final success = await notifier.deleteDocumentType(dt.id);
               if (!success && context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Delete failed: ${notifier.lastError}')),
+                  SnackBar(
+                    content: Text('Delete failed: ${notifier.lastError}'),
+                  ),
                 );
               }
             },
@@ -537,7 +580,10 @@ class _StoragePathsTab extends ConsumerWidget {
           children: [
             const Icon(Icons.error_outline, size: 48),
             const SizedBox(height: 16),
-            Text('Failed to load\n${friendlyApiMessage(err)}', textAlign: TextAlign.center),
+            Text(
+              'Failed to load\n${friendlyApiMessage(err)}',
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 16),
             FilledButton.tonal(
               onPressed: () => ref.invalidate(storagePathsProvider),
@@ -563,20 +609,25 @@ class _StoragePathsTab extends ConsumerWidget {
                     final sp = sorted[i];
                     return ListTile(
                       leading: const CircleAvatar(
-                          child: Icon(Icons.folder_outlined)),
+                        child: Icon(Icons.folder_outlined),
+                      ),
                       title: Text(sp.name),
-                      subtitle: Text('${sp.documentCount} documents — ${sp.path}'),
+                      subtitle: Text(
+                        '${sp.documentCount} documents — ${sp.path}',
+                      ),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
                             icon: const Icon(Icons.edit_outlined, size: 20),
-                            onPressed: () =>
-                                _editStoragePath(context, ref, sp),
+                            onPressed: () => _editStoragePath(context, ref, sp),
                           ),
                           IconButton(
-                            icon: Icon(Icons.delete_outline, size: 20,
-                                color: Theme.of(context).colorScheme.error),
+                            icon: Icon(
+                              Icons.delete_outline,
+                              size: 20,
+                              color: Theme.of(context).colorScheme.error,
+                            ),
                             onPressed: () =>
                                 _deleteStoragePath(context, ref, sp),
                           ),
@@ -598,21 +649,24 @@ class _StoragePathsTab extends ConsumerWidget {
     _showStoragePathDialog(context, ref, null);
   }
 
-  void _editStoragePath(
-      BuildContext context, WidgetRef ref, StoragePath sp) {
+  void _editStoragePath(BuildContext context, WidgetRef ref, StoragePath sp) {
     _showStoragePathDialog(context, ref, sp);
   }
 
   void _showStoragePathDialog(
-      BuildContext context, WidgetRef ref, StoragePath? existing) {
+    BuildContext context,
+    WidgetRef ref,
+    StoragePath? existing,
+  ) {
     final nameController = TextEditingController(text: existing?.name ?? '');
     final pathController = TextEditingController(text: existing?.path ?? '');
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title:
-            Text(existing == null ? 'Create Storage Path' : 'Edit Storage Path'),
+        title: Text(
+          existing == null ? 'Create Storage Path' : 'Edit Storage Path',
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -663,8 +717,7 @@ class _StoragePathsTab extends ConsumerWidget {
     );
   }
 
-  void _deleteStoragePath(
-      BuildContext context, WidgetRef ref, StoragePath sp) {
+  void _deleteStoragePath(BuildContext context, WidgetRef ref, StoragePath sp) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -682,7 +735,9 @@ class _StoragePathsTab extends ConsumerWidget {
               final success = await notifier.deleteStoragePath(sp.id);
               if (!success && context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Delete failed: ${notifier.lastError}')),
+                  SnackBar(
+                    content: Text('Delete failed: ${notifier.lastError}'),
+                  ),
                 );
               }
             },

@@ -56,11 +56,7 @@ class _TagPickerSheetState extends State<TagPickerSheet> {
                 itemBuilder: (_, i) {
                   final tag = filtered[i];
                   return ListTile(
-                    leading: CircleAvatar(
-                      radius: 12,
-                      backgroundColor: TagChip.parseColor(tag.colour) ??
-                          Theme.of(context).colorScheme.secondaryContainer,
-                    ),
+                    leading: TagDot(tag: tag, size: 24),
                     title: Text(tag.name),
                     onTap: () => widget.onSelected(tag),
                   );

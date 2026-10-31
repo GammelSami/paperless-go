@@ -75,7 +75,9 @@ class _FilterBottomSheetState extends ConsumerState<FilterBottomSheet> {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -125,7 +127,10 @@ class _FilterBottomSheetState extends ConsumerState<FilterBottomSheet> {
                 const SizedBox(height: 20),
 
                 // Correspondent
-                Text('Correspondent', style: Theme.of(context).textTheme.titleSmall),
+                Text(
+                  'Correspondent',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
                 const SizedBox(height: 8),
                 correspondentsAsync.when(
                   loading: () => const LinearProgressIndicator(),
@@ -149,7 +154,10 @@ class _FilterBottomSheetState extends ConsumerState<FilterBottomSheet> {
                 const SizedBox(height: 20),
 
                 // Document Type
-                Text('Document Type', style: Theme.of(context).textTheme.titleSmall),
+                Text(
+                  'Document Type',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
                 const SizedBox(height: 8),
                 docTypesAsync.when(
                   loading: () => const LinearProgressIndicator(),
@@ -186,17 +194,29 @@ class _FilterBottomSheetState extends ConsumerState<FilterBottomSheet> {
                       return FilterChip(
                         label: Text(tag.name),
                         selected: selected,
-                        backgroundColor: TagChip.parseColor(tag.colour),
-                        selectedColor: TagChip.parseColor(tag.colour)?.withValues(alpha: 0.8),
+                        // Fork: subtle tag look; selected = a bit more tint.
+                        backgroundColor: TagChip.fill(
+                          TagChip.colorOf(context, tag),
+                        ),
+                        selectedColor: TagChip.colorOf(
+                          context,
+                          tag,
+                        ).withValues(alpha: 0.22),
+                        side: BorderSide(
+                          color: TagChip.outline(TagChip.colorOf(context, tag)),
+                          width: TagChip.outlineWidth,
+                        ),
                         labelStyle: TextStyle(
-                          color: selected && TagChip.parseColor(tag.colour) != null
-                              ? TagChip.contrastColor(TagChip.parseColor(tag.colour)!)
-                              : null,
+                          color: TagChip.textColor(
+                            context,
+                            TagChip.colorOf(context, tag),
+                          ),
                           fontSize: 13,
                         ),
-                        checkmarkColor: TagChip.parseColor(tag.colour) != null
-                            ? TagChip.contrastColor(TagChip.parseColor(tag.colour)!)
-                            : null,
+                        checkmarkColor: TagChip.textColor(
+                          context,
+                          TagChip.colorOf(context, tag),
+                        ),
                         onSelected: (v) => setState(() {
                           if (v) {
                             _tagIds.add(tag.id);
@@ -212,7 +232,10 @@ class _FilterBottomSheetState extends ConsumerState<FilterBottomSheet> {
                 const SizedBox(height: 20),
 
                 // Date range
-                Text('Created Date', style: Theme.of(context).textTheme.titleSmall),
+                Text(
+                  'Created Date',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
@@ -245,19 +268,21 @@ class _FilterBottomSheetState extends ConsumerState<FilterBottomSheet> {
               width: double.infinity,
               child: FilledButton(
                 onPressed: () {
-                  widget.onApply(widget.currentFilter.copyWith(
-                    ordering: _ordering,
-                    correspondentId: _correspondentId,
-                    documentTypeId: _documentTypeId,
-                    tagIds: _tagIds.isEmpty ? null : _tagIds,
-                    createdDateFrom: _dateFrom,
-                    createdDateTo: _dateTo,
-                    clearCorrespondent: _correspondentId == null,
-                    clearDocumentType: _documentTypeId == null,
-                    clearTags: _tagIds.isEmpty,
-                    clearDateFrom: _dateFrom == null,
-                    clearDateTo: _dateTo == null,
-                  ));
+                  widget.onApply(
+                    widget.currentFilter.copyWith(
+                      ordering: _ordering,
+                      correspondentId: _correspondentId,
+                      documentTypeId: _documentTypeId,
+                      tagIds: _tagIds.isEmpty ? null : _tagIds,
+                      createdDateFrom: _dateFrom,
+                      createdDateTo: _dateTo,
+                      clearCorrespondent: _correspondentId == null,
+                      clearDocumentType: _documentTypeId == null,
+                      clearTags: _tagIds.isEmpty,
+                      clearDateFrom: _dateFrom == null,
+                      clearDateTo: _dateTo == null,
+                    ),
+                  );
                   Navigator.pop(context);
                 },
                 child: const Text('Apply Filters'),
