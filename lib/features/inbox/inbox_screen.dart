@@ -284,6 +284,28 @@ class _CardStackState extends ConsumerState<_CardStack>
   }
 }
 
+/// Fork: one type scale and one spacing rhythm for the inbox card, so sizes
+/// and gaps don't drift apart. Type steps 16 / 12 / 11 come from the classic
+/// modular scale (Bringhurst, The Elements of Typographic Style); every gap
+/// sits on the 4-px grid.
+abstract final class _CardStyle {
+  static const edge = Spacing.lg; // 16: text inset from the card edge
+  static const block = Spacing.sm; // 8: between blocks (title, chips, buttons)
+  static const gap = Spacing.xs; // 4: between chips and tight pairs
+
+  static TextStyle? title(BuildContext c) => Theme.of(c).textTheme.titleMedium
+      ?.copyWith(fontSize: 16, fontWeight: FontWeight.w600, height: 1.25);
+  static TextStyle? meta(BuildContext c) =>
+      Theme.of(c).textTheme.bodySmall?.copyWith(fontSize: 12, height: 1.35);
+  static TextStyle? chip(BuildContext c) => Theme.of(c).textTheme.labelSmall
+      ?.copyWith(fontSize: 11, fontWeight: FontWeight.w500, height: 1.3);
+
+  /// Shared chip box: tags and field chips are the same height.
+  static const chipBorder = 1.2;
+  static const chipPadV = 1.0;
+  static const chipPadH = 6.0;
+}
+
 /// Fork: Sam's layout. Everything above the button row is one big tap area
 /// for paging (right half = next page, left half = previous), so the thumb
 /// never has to reach the top. The info block is as tall as its content and
@@ -307,7 +329,6 @@ class _InboxCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = AppTokens.of(context);
-    final text = Theme.of(context).textTheme;
     final fieldDefs = ref.watch(customFieldsProvider).valueOrNull ?? {};
     final dateFields = [
       for (final f in document.customFields)
@@ -321,13 +342,13 @@ class _InboxCard extends ConsumerWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: tokens.inkSoft),
-          const SizedBox(width: Spacing.xs),
+          Icon(icon, size: 14, color: tokens.inkSoft),
+          const SizedBox(width: _CardStyle.gap),
           Text(
             d != null ? formatDate(d) : '—',
             // Tabular digits: every number is equally wide, so stacked
             // dates line up exactly.
-            style: text.bodyMedium?.copyWith(
+            style: _CardStyle.meta(context)?.copyWith(
               color: tokens.inkSoft,
               fontFeatures: const [FontFeature.tabularFigures()],
             ),
@@ -427,7 +448,6 @@ class _CardInfo extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = AppTokens.of(context);
-    final text = Theme.of(context).textTheme;
     final correspondents = ref.watch(correspondentsProvider).valueOrNull ?? {};
     final docTypes = ref.watch(documentTypesProvider).valueOrNull ?? {};
     final storagePaths = ref.watch(storagePathsProvider).valueOrNull ?? {};
@@ -453,24 +473,22 @@ class _CardInfo extends ConsumerWidget {
     final details = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(document.title, style: text.titleSmall),
-        const SizedBox(height: 2),
+        Text(document.title, style: _CardStyle.title(context)),
+        const SizedBox(height: _CardStyle.gap),
         Text(
           origin.isEmpty ? 'Kein Absender' : origin,
-          style: text.bodySmall?.copyWith(
-            color: origin.isEmpty ? tokens.inkSoft : null,
-          ),
+          style: _CardStyle.meta(context),
         ),
         if (fields.isNotEmpty || visibleTags.isNotEmpty) ...[
-          const SizedBox(height: Spacing.xs),
+          const SizedBox(height: _CardStyle.block),
           if (fields.isNotEmpty)
             Wrap(
-              spacing: Spacing.xs,
-              runSpacing: Spacing.xs,
+              spacing: _CardStyle.gap,
+              runSpacing: _CardStyle.gap,
               children: [for (final label in fields) _FieldChip(label: label)],
             ),
           if (fields.isNotEmpty && visibleTags.isNotEmpty)
-            const SizedBox(height: Spacing.xs),
+            const SizedBox(height: _CardStyle.gap),
           if (visibleTags.isNotEmpty) _PackedTags(tags: visibleTags),
         ],
       ],
@@ -479,11 +497,11 @@ class _CardInfo extends ConsumerWidget {
 
     // Sideways label in a Stack (not IntrinsicHeight, which can't measure the
     // LayoutBuilder in the tag block): it spans exactly the details' height.
-    const labelWidth = 16.0;
+    const labelWidth = 14.0;
     return Stack(
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: labelWidth + Spacing.xs),
+          padding: const EdgeInsets.only(left: labelWidth + _CardStyle.block),
           child: details,
         ),
         Positioned(
@@ -498,7 +516,7 @@ class _CardInfo extends ConsumerWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
-              style: text.labelSmall?.copyWith(color: tokens.inkSoft),
+              style: _CardStyle.chip(context)?.copyWith(color: tokens.inkSoft),
             ),
           ),
         ),
@@ -522,16 +540,16 @@ class _CardInfo extends ConsumerWidget {
 }
 
 /// Tags packed to fill the width: longest first into the first line they fit
-/// (first-fit decreasing), then each line's leftover space is shared out as
-/// extra padding, so lines end flush right instead of leaving a ragged gap.
-/// A last line that is less than 3/4 full keeps its natural padding.
+/// (first-fit decreasing), then every chip gets the same extra padding,
+/// as much as the fullest line allows (capped), to use spare width evenly.
 class _PackedTags extends StatelessWidget {
   const _PackedTags({required this.tags});
 
   final List<Tag> tags;
 
-  static const _gap = 4.0;
-  static const _basePad = 6.0;
+  static const _gap = _CardStyle.gap;
+  static const _basePad = _CardStyle.chipPadH;
+  static const _maxExtra = 10.0;
 
   @override
   Widget build(BuildContext context) {
@@ -568,6 +586,14 @@ class _PackedTags extends StatelessWidget {
           }
         }
 
+        // One extra padding for every chip: the tightest line decides, so
+        // all chips stay the same style (no squeezed line above a stretched
+        // one). Lines may then end slightly ragged, which reads calmer.
+        final extra = [
+          for (var j = 0; j < lines.length; j++)
+            (box.maxWidth - used[j]) / lines[j].length / 2,
+        ].reduce((a, b) => a < b ? a : b).clamp(0.0, _maxExtra);
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -578,17 +604,7 @@ class _PackedTags extends StatelessWidget {
                   children: [
                     for (final (i, (t, _)) in lines[j].indexed) ...[
                       if (i > 0) const SizedBox(width: _gap),
-                      InboxTagChip(
-                        tag: t,
-                        hPad:
-                            _basePad +
-                            (j == lines.length - 1 &&
-                                    used[j] < box.maxWidth * 0.75
-                                ? 0
-                                : (box.maxWidth - used[j]) /
-                                      lines[j].length /
-                                      2),
-                      ),
+                      InboxTagChip(tag: t, hPad: _basePad + extra),
                     ],
                   ],
                 ),
@@ -608,12 +624,9 @@ class InboxTagChip extends StatelessWidget {
   final Tag tag;
   final double hPad;
 
-  static const borderWidth = 1.2;
+  static const borderWidth = _CardStyle.chipBorder;
 
-  static TextStyle? textStyle(BuildContext context) => Theme.of(context)
-      .textTheme
-      .labelSmall
-      ?.copyWith(fontSize: 10.5, fontWeight: FontWeight.w500, height: 1.3);
+  static TextStyle? textStyle(BuildContext context) => _CardStyle.chip(context);
 
   @override
   Widget build(BuildContext context) {
@@ -624,7 +637,10 @@ class InboxTagChip extends StatelessWidget {
     return Semantics(
       label: '${tag.name} tag',
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: hPad, vertical: 1),
+        padding: EdgeInsets.symmetric(
+          horizontal: hPad,
+          vertical: _CardStyle.chipPadV,
+        ),
         decoration: BoxDecoration(
           color: c.withValues(alpha: 0.08),
           border: Border.all(
@@ -654,12 +670,15 @@ class _FieldChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = AppTokens.of(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      padding: const EdgeInsets.symmetric(
+        horizontal: _CardStyle.chipPadH,
+        vertical: _CardStyle.chipPadV,
+      ),
       decoration: BoxDecoration(
-        border: Border.all(color: tokens.line),
+        border: Border.all(color: tokens.line, width: _CardStyle.chipBorder),
         borderRadius: BorderRadius.circular(Radii.pill),
       ),
-      child: Text(label, style: Theme.of(context).textTheme.labelSmall),
+      child: Text(label, style: _CardStyle.chip(context)),
     );
   }
 }
@@ -815,10 +834,10 @@ class _PagedPreviewState extends ConsumerState<_PagedPreview> {
             constraints: BoxConstraints(maxHeight: widget.maxInfoHeight),
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(
-                Spacing.md,
-                Spacing.sm,
-                Spacing.lg,
-                Spacing.xs,
+                _CardStyle.edge,
+                _CardStyle.block,
+                _CardStyle.edge,
+                _CardStyle.block,
               ),
               child: widget.info,
             ),
