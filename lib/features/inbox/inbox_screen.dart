@@ -381,12 +381,12 @@ class _InboxCard extends ConsumerWidget {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 dateLine(
-                                  Icons.event_outlined,
+                                  Icons.description_outlined,
                                   'Dokumentdatum',
                                   document.created,
                                 ),
                                 for (final (name, d) in dateFields)
-                                  dateLine(Icons.alarm, name, d),
+                                  dateLine(Icons.priority_high, name, d),
                               ],
                             ),
                           ),
