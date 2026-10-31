@@ -13,11 +13,13 @@ import '../../core/models/tag.dart';
 import '../../shared/error_banner.dart';
 import '../../shared/format.dart';
 import '../../shared/widgets/metadata_dropdown.dart';
+import '../../shared/widgets/tag_chip.dart';
 import '../../shared/widgets/tag_picker_sheet.dart';
 import 'inbox_notifier.dart';
 
-/// Fork: one sheet to edit every field the AI filled in, including the date
-/// (German input, picker, and Paperless' own date suggestions as chips).
+/// Fork: quick edit for every field the AI fills (also when it left one
+/// empty), in the card's order, with Paperless' date suggestions under each
+/// date field. "OK" saves; accepting stays on the card.
 class InboxEditSheet extends ConsumerStatefulWidget {
   const InboxEditSheet({super.key, required this.document});
 
@@ -46,7 +48,8 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
     super.initState();
     _title = TextEditingController(text: _doc.title);
     _date = TextEditingController(
-        text: _doc.created != null ? formatDate(_doc.created!) : '');
+      text: _doc.created != null ? formatDate(_doc.created!) : '',
+    );
     _correspondentId = _doc.correspondent;
     _documentTypeId = _doc.documentType;
     _storagePathId = _doc.storagePath;
@@ -73,6 +76,11 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
   TextEditingController _textFor(int field, String initial) =>
       _fieldText.putIfAbsent(field, () => TextEditingController(text: initial));
 
+  /// Custom fields DocSort can fill (projects/docsort/classify.sh looks them
+  /// up by these names). Shown even when empty, so a missed value can be
+  /// added right here.
+  static const _aiFieldNames = {'Frist', 'Betrag', 'Erledigt'};
+
   @override
   Widget build(BuildContext context) {
     final correspondents = ref.watch(correspondentsProvider).valueOrNull ?? {};
@@ -81,10 +89,13 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
     final tags = ref.watch(tagsProvider).valueOrNull ?? {};
     final fieldDefs = ref.watch(customFieldsProvider).valueOrNull ?? {};
     final shownTags = _tags.where((id) => !(tags[id]?.isInboxTag ?? false));
+    final fields = _shownFields(fieldDefs);
+    const gap = SizedBox(height: Spacing.md);
 
+    // Same order as the inbox card: title, category / correspondent, type,
+    // amount-like fields, tags, then the dates.
     return Padding(
-      padding: EdgeInsets.only(
-          bottom: MediaQuery.viewInsetsOf(context).bottom),
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: DraggableScrollableSheet(
         expand: false,
         initialChildSize: 0.9,
@@ -100,51 +111,7 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
               decoration: const InputDecoration(labelText: 'Titel'),
               maxLines: null,
             ),
-            const SizedBox(height: Spacing.md),
-            _dateField(context, _date, 'Datum', onPicked: (d) {
-              setState(() => _date.text = formatDate(d));
-            }),
-            FutureBuilder<List<DateTime>>(
-              future: _suggestedDates,
-              builder: (context, snap) {
-                final dates = snap.data ?? const [];
-                if (dates.isEmpty) return const SizedBox.shrink();
-                return Padding(
-                  padding: const EdgeInsets.only(top: Spacing.xs),
-                  child: Wrap(
-                    spacing: Spacing.xs,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text('Vorschläge:',
-                          style: Theme.of(context).textTheme.bodySmall),
-                      for (final d in dates)
-                        ActionChip(
-                          label: Text(formatDate(d)),
-                          onPressed: () =>
-                              setState(() => _date.text = formatDate(d)),
-                        ),
-                    ],
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: Spacing.md),
-            MetadataDropdown<Correspondent>(
-              label: 'Absender',
-              value: correspondents[_correspondentId],
-              items: correspondents.values.toList(),
-              displayName: (c) => c.name,
-              onChanged: (c) => setState(() => _correspondentId = c?.id),
-            ),
-            const SizedBox(height: Spacing.md),
-            MetadataDropdown<DocumentType>(
-              label: 'Typ',
-              value: docTypes[_documentTypeId],
-              items: docTypes.values.toList(),
-              displayName: (dt) => dt.name,
-              onChanged: (dt) => setState(() => _documentTypeId = dt?.id),
-            ),
-            const SizedBox(height: Spacing.md),
+            gap,
             MetadataDropdown<StoragePath>(
               label: 'Kategorie',
               value: storagePaths[_storagePathId],
@@ -152,40 +119,62 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
               displayName: (sp) => sp.name,
               onChanged: (sp) => setState(() => _storagePathId = sp?.id),
             ),
-            const SizedBox(height: Spacing.md),
+            gap,
+            MetadataDropdown<Correspondent>(
+              label: 'Absender',
+              value: correspondents[_correspondentId],
+              items: correspondents.values.toList(),
+              displayName: (c) => c.name,
+              onChanged: (c) => setState(() => _correspondentId = c?.id),
+            ),
+            gap,
+            MetadataDropdown<DocumentType>(
+              label: 'Typ',
+              value: docTypes[_documentTypeId],
+              items: docTypes.values.toList(),
+              displayName: (dt) => dt.name,
+              onChanged: (dt) => setState(() => _documentTypeId = dt?.id),
+            ),
+            for (final def in fields)
+              if (def.dataType != 'date') ...[gap, _customField(context, def)],
+            gap,
             Text('Tags', style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: Spacing.xs),
             Wrap(
               spacing: Spacing.xs,
+              runSpacing: Spacing.xs,
               children: [
-                for (final id in shownTags)
-                  InputChip(
-                    label: Text(tags[id]?.name ?? '#$id'),
-                    onDeleted: () => setState(() => _tags.remove(id)),
-                  ),
+                for (final id in shownTags) _tagChip(context, tags[id], id),
                 ActionChip(
                   avatar: const Icon(Icons.add, size: 18),
                   label: const Text('Tag'),
-                  onPressed: () => _pickTag(context, tags.values
-                      .where((t) => !t.isInboxTag && !_tags.contains(t.id))
-                      .toList()),
+                  onPressed: () => _pickTag(
+                    context,
+                    tags.values
+                        .where((t) => !t.isInboxTag && !_tags.contains(t.id))
+                        .toList(),
+                  ),
                 ),
               ],
             ),
-            for (final f in _doc.customFields)
-              if (fieldDefs[f.field] != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: Spacing.md),
-                  child: _customField(context, fieldDefs[f.field]!),
-                ),
+            gap,
+            _dateField(
+              context,
+              _date,
+              'Dokumentdatum',
+              onPicked: (d) => setState(() => _date.text = formatDate(d)),
+            ),
+            _suggestions(_date),
+            for (final def in fields)
+              if (def.dataType == 'date') ...[
+                gap,
+                _customField(context, def),
+                _suggestions(_textFor(def.id, _initialDate(def.id))),
+              ],
             const SizedBox(height: Spacing.lg),
             FilledButton(
-              onPressed: _saving ? null : () => _save(accept: true),
-              child: const Text('Speichern & annehmen'),
-            ),
-            const SizedBox(height: Spacing.xs),
-            OutlinedButton(
-              onPressed: _saving ? null : () => _save(accept: false),
-              child: const Text('Nur speichern'),
+              onPressed: _saving ? null : _save,
+              child: const Text('OK'),
             ),
           ],
         ),
@@ -193,9 +182,78 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
     );
   }
 
-  Widget _dateField(BuildContext context, TextEditingController controller,
-      String label,
-      {required ValueChanged<DateTime> onPicked}) {
+  /// The document's own custom fields plus the empty AI fields, AI fields
+  /// first in DocSort's order.
+  List<CustomField> _shownFields(Map<int, CustomField> defs) {
+    final ids = <int>{
+      for (final name in _aiFieldNames)
+        ...defs.values.where((d) => d.name == name).map((d) => d.id),
+      ..._doc.customFields.map((f) => f.field),
+    };
+    return [
+      for (final id in ids)
+        if (defs[id] != null) defs[id]!,
+    ];
+  }
+
+  String _initialDate(int field) {
+    final v = _fieldValues[field];
+    final d = v is String ? DateTime.tryParse(v) : null;
+    return d != null ? formatDate(d) : '';
+  }
+
+  /// Paperless' date suggestions for this document as one-tap chips.
+  Widget _suggestions(TextEditingController target) =>
+      FutureBuilder<List<DateTime>>(
+        future: _suggestedDates,
+        builder: (context, snap) {
+          final dates = snap.data ?? const [];
+          if (dates.isEmpty) return const SizedBox.shrink();
+          return Padding(
+            padding: const EdgeInsets.only(top: Spacing.xs),
+            child: Wrap(
+              spacing: Spacing.xs,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(
+                  'Vorschläge:',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                for (final d in dates)
+                  ActionChip(
+                    label: Text(formatDate(d)),
+                    onPressed: () =>
+                        setState(() => target.text = formatDate(d)),
+                  ),
+              ],
+            ),
+          );
+        },
+      );
+
+  /// Tag in its Paperless colour, same look as on the inbox card.
+  Widget _tagChip(BuildContext context, Tag? tag, int id) {
+    final ink = Theme.of(context).colorScheme.onSurface;
+    final c =
+        TagChip.parseColor(tag?.colour) ??
+        Theme.of(context).colorScheme.secondary;
+    return InputChip(
+      label: Text(tag?.name ?? '#$id'),
+      labelStyle: TextStyle(color: Color.lerp(ink, c, 0.3)),
+      backgroundColor: c.withValues(alpha: 0.08),
+      side: BorderSide(color: c.withValues(alpha: 0.55), width: 1.2),
+      shape: const StadiumBorder(),
+      deleteIconColor: Color.lerp(ink, c, 0.3),
+      onDeleted: () => setState(() => _tags.remove(id)),
+    );
+  }
+
+  Widget _dateField(
+    BuildContext context,
+    TextEditingController controller,
+    String label, {
+    required ValueChanged<DateTime> onPicked,
+  }) {
     return TextField(
       controller: controller,
       keyboardType: TextInputType.datetime,
@@ -229,11 +287,13 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
           onChanged: (v) => setState(() => _fieldValues[def.id] = v),
         );
       case 'date':
-        final parsed = value is String ? DateTime.tryParse(value) : null;
-        final initial = parsed != null ? formatDate(parsed) : '';
-        final controller = _textFor(def.id, initial);
-        return _dateField(context, controller, def.name,
-            onPicked: (d) => setState(() => controller.text = formatDate(d)));
+        final controller = _textFor(def.id, _initialDate(def.id));
+        return _dateField(
+          context,
+          controller,
+          def.name,
+          onPicked: (d) => setState(() => controller.text = formatDate(d)),
+        );
       case 'monetary':
         final shown = value == null
             ? ''
@@ -241,7 +301,9 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
         return TextField(
           controller: _textFor(def.id, shown),
           keyboardType: const TextInputType.numberWithOptions(
-              decimal: true, signed: true),
+            decimal: true,
+            signed: true,
+          ),
           decoration: InputDecoration(
             labelText: def.name,
             suffixText: '€',
@@ -292,16 +354,20 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
 
     try {
       final fields = <Map<String, dynamic>>[];
-      for (final f in _doc.customFields) {
-        final def = fieldDefs[f.field];
-        final text = _fieldText[f.field]?.text;
-        dynamic value = _fieldValues[f.field];
-        if (def != null && text != null) {
+      final onDoc = _doc.customFields.map((f) => f.field).toSet();
+      for (final def in _shownFields(fieldDefs)) {
+        final id = def.id;
+        final text = _fieldText[id]?.text;
+        dynamic value = _fieldValues[id];
+        if (text != null) {
           switch (def.dataType) {
             case 'date':
               value = isoDate(text, def.name);
             case 'monetary':
-              final t = text.trim().replaceAll(' ', '').replaceAll(',', '.');
+              // German input: "1.249,90" → 1249.90 (dots are thousands).
+              var t = text.trim().replaceAll(' ', '');
+              if (t.contains(','))
+                t = t.replaceAll('.', '').replaceAll(',', '.');
               if (t.isEmpty) {
                 value = null;
               } else {
@@ -319,7 +385,12 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
               value = text;
           }
         }
-        fields.add({'field': f.field, 'value': value});
+        // An AI field the document never had stays off unless filled in.
+        final touched =
+            _fieldValues.containsKey(id) ||
+            (text != null && text.trim().isNotEmpty);
+        if (!onDoc.contains(id) && !touched) continue;
+        fields.add({'field': id, 'value': value});
       }
       final created = isoDate(_date.text, 'Datum');
       return {
@@ -337,16 +408,13 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
     }
   }
 
-  Future<void> _save({required bool accept}) async {
+  /// Saves only; accepting stays the ✓ on the card.
+  Future<void> _save() async {
     final fieldDefs = ref.read(customFieldsProvider).valueOrNull ?? {};
     final data = _patch(fieldDefs);
     if (data == null) return;
     setState(() => _saving = true);
     try {
-      if (accept) {
-        final tags = await ref.read(tagsProvider.future);
-        data['tags'] = _tags.where((id) => !(tags[id]?.isInboxTag ?? false)).toList();
-      }
       await ref.read(paperlessApiProvider).updateDocument(_doc.id, data);
       ref.invalidate(inboxNotifierProvider);
       if (!mounted) return;
@@ -355,7 +423,9 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
       if (!mounted) return;
       setState(() => _saving = false);
       showErrorBanner(
-          context, 'Speichern fehlgeschlagen: ${friendlyApiMessage(e)}');
+        context,
+        'Speichern fehlgeschlagen: ${friendlyApiMessage(e)}',
+      );
     }
   }
 }

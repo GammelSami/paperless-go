@@ -21,7 +21,7 @@ void main() {
       );
 
       expect(tester.takeException(), isNull);
-      expect(find.text('None'), findsOneWidget);
+      expect(find.text('Keine Angabe'), findsOneWidget);
     });
 
     testWidgets('selecting an item invokes onChanged', (tester) async {

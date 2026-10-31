@@ -33,8 +33,9 @@ class MetadataDropdown<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Guard: if value is not in items, treat as null to avoid assertion error.
-    final effectiveValue =
-        (value != null && items.contains(value)) ? value : null;
+    final effectiveValue = (value != null && items.contains(value))
+        ? value
+        : null;
 
     return Row(
       children: [
@@ -43,8 +44,10 @@ class MetadataDropdown<T> extends StatelessWidget {
             decoration: InputDecoration(
               labelText: label,
               border: const OutlineInputBorder(),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 8,
+              ),
               suffix: suffix,
             ),
             child: DropdownButtonHideUnderline(
@@ -52,14 +55,21 @@ class MetadataDropdown<T> extends StatelessWidget {
                 value: effectiveValue,
                 isExpanded: true,
                 isDense: true,
-                hint: const Text('None'),
+                hint: const Text('Keine Angabe'),
                 items: [
-                  DropdownMenuItem<T>(value: null, child: const Text('None')),
-                  ...items.map((item) => DropdownMenuItem<T>(
-                        value: item,
-                        child: Text(displayName(item),
-                            overflow: TextOverflow.ellipsis),
-                      )),
+                  DropdownMenuItem<T>(
+                    value: null,
+                    child: const Text('Keine Angabe'),
+                  ),
+                  ...items.map(
+                    (item) => DropdownMenuItem<T>(
+                      value: item,
+                      child: Text(
+                        displayName(item),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
                 ],
                 onChanged: onChanged,
               ),

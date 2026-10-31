@@ -38,8 +38,9 @@ class InboxState {
       isLoadingMore: isLoadingMore ?? this.isLoadingMore,
       hasMore: hasMore ?? this.hasMore,
       currentPage: currentPage ?? this.currentPage,
-      loadMoreError:
-          clearLoadMoreError ? null : (loadMoreError ?? this.loadMoreError),
+      loadMoreError: clearLoadMoreError
+          ? null
+          : (loadMoreError ?? this.loadMoreError),
     );
   }
 }
@@ -87,18 +88,22 @@ class InboxNotifier extends _$InboxNotifier {
       // instance; do NOT weaken to == (a refresh yields an equal-by-value state
       // and the guard would stop firing).
       if (!identical(state.valueOrNull, loadingState)) return;
-      state = AsyncData(loadingState.copyWith(
-        documents: [...loadingState.documents, ...response.results],
-        isLoadingMore: false,
-        hasMore: response.next != null,
-        currentPage: nextPage,
-      ));
+      state = AsyncData(
+        loadingState.copyWith(
+          documents: [...loadingState.documents, ...response.results],
+          isLoadingMore: false,
+          hasMore: response.next != null,
+          currentPage: nextPage,
+        ),
+      );
     } catch (e) {
       if (!identical(state.valueOrNull, loadingState)) return;
-      state = AsyncData(loadingState.copyWith(
-        isLoadingMore: false,
-        loadMoreError: 'Failed to load more: ${friendlyApiMessage(e)}',
-      ));
+      state = AsyncData(
+        loadingState.copyWith(
+          isLoadingMore: false,
+          loadMoreError: 'Failed to load more: ${friendlyApiMessage(e)}',
+        ),
+      );
     }
   }
 
@@ -126,8 +131,10 @@ class InboxNotifier extends _$InboxNotifier {
     try {
       final api = ref.read(paperlessApiProvider);
       final tagsMap = await ref.read(tagsProvider.future);
-      final inboxTagIds =
-          tagsMap.values.where((t) => t.isInboxTag).map((t) => t.id).toSet();
+      final inboxTagIds = tagsMap.values
+          .where((t) => t.isInboxTag)
+          .map((t) => t.id)
+          .toSet();
 
       final newTags = <int>{
         ...doc.tags.where((id) => !inboxTagIds.contains(id)),
@@ -152,10 +159,12 @@ class InboxNotifier extends _$InboxNotifier {
 
       final current = state.valueOrNull;
       if (current != null) {
-        state = AsyncData(current.copyWith(
-          documents: current.documents.where((d) => d.id != doc.id).toList(),
-          totalCount: (current.totalCount - 1).clamp(0, current.totalCount),
-        ));
+        state = AsyncData(
+          current.copyWith(
+            documents: current.documents.where((d) => d.id != doc.id).toList(),
+            totalCount: (current.totalCount - 1).clamp(0, current.totalCount),
+          ),
+        );
       }
       return previous;
     } finally {
@@ -183,8 +192,9 @@ class InboxNotifier extends _$InboxNotifier {
           .where((t) => t.isInboxTag)
           .map((t) => t.id)
           .toSet();
-      final newTags =
-          doc.tags.where((id) => !inboxTagIds.contains(id)).toList();
+      final newTags = doc.tags
+          .where((id) => !inboxTagIds.contains(id))
+          .toList();
 
       // API call first — if it fails, exception propagates to caller
       await api.updateDocument(doc.id, {'tags': newTags});
@@ -192,12 +202,15 @@ class InboxNotifier extends _$InboxNotifier {
       // Only update local state on success
       final current = state.valueOrNull;
       if (current != null) {
-        final remaining =
-            current.documents.where((d) => d.id != doc.id).toList();
-        state = AsyncData(current.copyWith(
-          documents: remaining,
-          totalCount: (current.totalCount - 1).clamp(0, current.totalCount),
-        ));
+        final remaining = current.documents
+            .where((d) => d.id != doc.id)
+            .toList();
+        state = AsyncData(
+          current.copyWith(
+            documents: remaining,
+            totalCount: (current.totalCount - 1).clamp(0, current.totalCount),
+          ),
+        );
       }
     } finally {
       _removing.remove(doc.id);

@@ -205,6 +205,7 @@ class _CardStackState extends ConsumerState<_CardStack>
                     document: active,
                     onAccept: () => _accept(active),
                     onEdit: () => _openEditSheet(active),
+                    onDetails: () => context.push('/documents/${active.id}'),
                     accepting: progress > 0.15,
                   ),
                 ),
@@ -279,6 +280,8 @@ class _CardStackState extends ConsumerState<_CardStack>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      // Above the bottom navigation, so the OK button is never hidden.
+      useRootNavigator: true,
       builder: (_) => InboxEditSheet(document: doc),
     );
   }
@@ -310,12 +313,14 @@ abstract final class _CardStyle {
 /// for paging (right half = next page, left half = previous), so the thumb
 /// never has to reach the top. The info block is as tall as its content and
 /// only scrolls past 60 % of the card; the page gets everything else.
-/// Only the bottom row edits: pencil, the dates in the middle, or ✓ accepts.
+/// Only the bottom row acts: pencil = quick edit, dates = full detail view,
+/// ✓ accepts.
 class _InboxCard extends ConsumerWidget {
   const _InboxCard({
     required this.document,
     this.onAccept,
     this.onEdit,
+    this.onDetails,
     this.dimmed = false,
     this.accepting = false,
   });
@@ -323,6 +328,9 @@ class _InboxCard extends ConsumerWidget {
   final Document document;
   final VoidCallback? onAccept;
   final VoidCallback? onEdit;
+
+  /// Dates in the button row open the full detail view (all settings).
+  final VoidCallback? onDetails;
   final bool dimmed;
   final bool accepting;
 
@@ -398,7 +406,7 @@ class _InboxCard extends ConsumerWidget {
                       ),
                       Expanded(
                         child: InkWell(
-                          onTap: onEdit,
+                          onTap: onDetails,
                           borderRadius: BorderRadius.circular(Radii.md),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
