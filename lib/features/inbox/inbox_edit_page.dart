@@ -359,7 +359,7 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
   /// Same height as the dropdowns (see MetadataDropdown).
   static InputDecoration _dense(InputDecoration d) => d.copyWith(
     isDense: true,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
     prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 36),
     suffixIconConstraints: const BoxConstraints(minWidth: 40, minHeight: 36),
   );

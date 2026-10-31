@@ -303,7 +303,6 @@ abstract final class _CardStyle {
   /// Shared chip box: tags and field chips are the same height.
   static const chipBorder = 1.2;
   static const chipPadV = 1.0;
-  static const chipPadH = 6.0;
 }
 
 /// Fork: Sam's layout. Everything above the button row is one big tap area
@@ -492,15 +491,10 @@ class _CardInfo extends ConsumerWidget {
         ),
         if (fields.isNotEmpty || visibleTags.isNotEmpty) ...[
           const SizedBox(height: _CardStyle.block),
-          if (fields.isNotEmpty)
-            Wrap(
-              spacing: _CardStyle.chipPadH,
-              runSpacing: _CardStyle.gap,
-              children: [for (final label in fields) _FieldChip(label: label)],
-            ),
+          if (fields.isNotEmpty) _PackedChips(fieldLabels: fields),
           if (fields.isNotEmpty && visibleTags.isNotEmpty)
             const SizedBox(height: _CardStyle.gap),
-          if (visibleTags.isNotEmpty) _PackedTags(tags: visibleTags),
+          if (visibleTags.isNotEmpty) _PackedChips(tags: visibleTags),
         ],
       ],
     );
@@ -606,13 +600,14 @@ class _CardInfo extends ConsumerWidget {
   }
 }
 
-/// Tags packed to fill the width: longest first into the first line they fit
+/// Chips packed to fill the width: longest first into the first line they fit
 /// (first-fit decreasing), then every chip gets the same extra padding,
 /// as much as the fullest line allows (capped), to use spare width evenly.
-class _PackedTags extends StatelessWidget {
-  const _PackedTags({required this.tags});
+class _PackedChips extends StatelessWidget {
+  const _PackedChips({this.tags = const [], this.fieldLabels = const []});
 
   final List<Tag> tags;
+  final List<String> fieldLabels;
 
   /// Inner padding (text to pill edge) and outer gap (pill to pill) are one
   /// value, so the space inside and between pills looks the same.
@@ -623,12 +618,16 @@ class _PackedTags extends StatelessWidget {
   Widget build(BuildContext context) {
     final style = InboxTagChip.textStyle(context);
     final scaler = MediaQuery.textScalerOf(context);
+    final chips = <({String label, Tag? tag})>[
+      for (final label in fieldLabels) (label: label, tag: null),
+      for (final tag in tags) (label: tag.name, tag: tag),
+    ];
     return LayoutBuilder(
       builder: (context, box) {
         // Width of a pill without its horizontal padding.
-        double core(Tag t) =>
+        double core(({String label, Tag? tag}) chip) =>
             (TextPainter(
-              text: TextSpan(text: t.name, style: style),
+              text: TextSpan(text: chip.label, style: style),
               textDirection: TextDirection.ltr,
               textScaler: scaler,
               maxLines: 1,
@@ -640,15 +639,17 @@ class _PackedTags extends StatelessWidget {
         // end up about equally full), then give every pill the same spacing,
         // as much as the fullest line allows. No squeezed line above an
         // almost empty one.
-        final cs = {for (final t in tags) t: core(t)};
-        final sorted = [...tags]..sort((a, b) => cs[b]!.compareTo(cs[a]!));
+        final cs = {for (final chip in chips) chip: core(chip)};
+        final sorted = [...chips]..sort((a, b) => cs[b]!.compareTo(cs[a]!));
         double need(double c, int n) => c + (3 * n - 1) * _minSpace;
-        var lines = <List<Tag>>[];
+        var lines = <List<({String label, Tag? tag})>>[];
         var cores = <double>[];
-        for (var count = 1; count <= tags.length; count++) {
-          lines = [for (var j = 0; j < count; j++) <Tag>[]];
+        for (var count = 1; count <= chips.length; count++) {
+          lines = [
+            for (var j = 0; j < count; j++) <({String label, Tag? tag})>[],
+          ];
           cores = List.filled(count, 0.0);
-          for (final t in sorted) {
+          for (final chip in sorted) {
             var j = 0;
             for (var k = 1; k < count; k++) {
               if (need(cores[k], lines[k].length) <
@@ -656,8 +657,8 @@ class _PackedTags extends StatelessWidget {
                 j = k;
               }
             }
-            lines[j].add(t);
-            cores[j] += cs[t]!;
+            lines[j].add(chip);
+            cores[j] += cs[chip]!;
           }
           final fitsAll = [
             for (var j = 0; j < count; j++)
@@ -683,11 +684,14 @@ class _PackedTags extends StatelessWidget {
                   children: [
                     // Every second line runs short-to-long, so the long
                     // pills don't all pile up on the left.
-                    for (final (i, t)
+                    for (final (i, chip)
                         in (j.isOdd ? lines[j].reversed : lines[j])
                             .indexed) ...[
                       if (i > 0) SizedBox(width: space),
-                      InboxTagChip(tag: t, hPad: space),
+                      if (chip.tag case final tag?)
+                        InboxTagChip(tag: tag, hPad: space)
+                      else
+                        _FieldChip(label: chip.label, hPad: space),
                     ],
                   ],
                 ),
@@ -741,16 +745,17 @@ class InboxTagChip extends StatelessWidget {
 }
 
 class _FieldChip extends StatelessWidget {
-  const _FieldChip({required this.label});
+  const _FieldChip({required this.label, required this.hPad});
 
   final String label;
+  final double hPad;
 
   @override
   Widget build(BuildContext context) {
     final tokens = AppTokens.of(context);
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: _CardStyle.chipPadH,
+      padding: EdgeInsets.symmetric(
+        horizontal: hPad,
         vertical: _CardStyle.chipPadV,
       ),
       decoration: BoxDecoration(
