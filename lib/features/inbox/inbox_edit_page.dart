@@ -236,6 +236,8 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
                         .toList(),
                     displayName: (t) => t.name,
                     leadingIcon: (t) => TagDot(tag: t, size: 20),
+                    // Match the menu's height so it stays above the keyboard.
+                    alignmentOffset: const Offset(0, -280),
                     onChanged: (t) {
                       if (t != null) setState(() => _tags.add(t.id));
                     },

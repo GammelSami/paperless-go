@@ -14,6 +14,7 @@ class MetadataDropdown<T> extends StatefulWidget {
   final List<T> items;
   final String Function(T) displayName;
   final Widget Function(T)? leadingIcon;
+  final Offset? alignmentOffset;
 
   /// Selection handler. When null the dropdown is disabled (e.g. mid-upload).
   final ValueChanged<T?>? onChanged;
@@ -38,6 +39,7 @@ class MetadataDropdown<T> extends StatefulWidget {
     required this.items,
     required this.displayName,
     this.leadingIcon,
+    this.alignmentOffset,
     required this.onChanged,
     this.suffix,
     this.emptyLabel = 'Keine Angabe',
@@ -134,6 +136,7 @@ class _MetadataDropdownState<T> extends State<MetadataDropdown<T>> {
     // weight, same height as the other compact fields.
     return LayoutBuilder(
       builder: (context, box) => DropdownMenu<T?>(
+        alignmentOffset: w.alignmentOffset,
         menuController: w.menuController,
         controller: _controller,
         focusNode: _focus,
