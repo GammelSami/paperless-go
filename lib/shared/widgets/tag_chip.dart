@@ -26,7 +26,9 @@ class TagChip extends StatelessWidget {
             ? const EdgeInsets.symmetric(horizontal: 6, vertical: 1)
             : const EdgeInsets.symmetric(horizontal: Spacing.sm, vertical: 3),
         decoration: BoxDecoration(
-          color: bgColor,
+          // Fork: dense chips are outlined in the tag colour, no fill.
+          color: dense ? null : bgColor,
+          border: dense ? Border.all(color: bgColor, width: 1.5) : null,
           borderRadius: BorderRadius.circular(Radii.pill),
         ),
         child: Text(
@@ -35,7 +37,10 @@ class TagChip extends StatelessWidget {
               (dense
                       ? Theme.of(context).textTheme.labelSmall
                       : Theme.of(context).textTheme.bodySmall)
-                  ?.copyWith(color: fgColor, fontWeight: FontWeight.w500),
+                  ?.copyWith(
+                color: dense ? null : fgColor,
+                fontWeight: FontWeight.w500,
+              ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),

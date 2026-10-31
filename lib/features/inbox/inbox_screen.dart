@@ -322,7 +322,10 @@ class _InboxCard extends ConsumerWidget {
         children: [
           Icon(icon, size: 16, color: tokens.inkSoft),
           const SizedBox(width: Spacing.xs),
-          Text(d != null ? formatDate(d) : '—', style: text.bodyMedium),
+          Text(
+            d != null ? formatDate(d) : '—',
+            style: text.bodyMedium?.copyWith(color: tokens.inkSoft),
+          ),
         ],
       ),
     );
