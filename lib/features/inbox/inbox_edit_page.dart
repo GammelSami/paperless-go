@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -42,6 +44,12 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
 
   /// Amount sign per monetary field (true = minus = you pay).
   final Map<int, bool> _negative = {};
+
+  /// A field was just touched: keep the bottom room (see build) until the
+  /// keyboard is up.
+  bool _lifted = false;
+  bool _keyboardWasOpen = false;
+  Timer? _liftTimer;
   late final Future<List<DateTime>> _suggestedDates;
   bool _saving = false;
 
@@ -74,6 +82,7 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
     for (final c in _fieldText.values) {
       c.dispose();
     }
+    _liftTimer?.cancel();
     super.dispose();
   }
 
@@ -95,6 +104,9 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
     final shownTags = _tags.where((id) => !(tags[id]?.isInboxTag ?? false));
     final fields = _shownFields(fieldDefs);
     const gap = SizedBox(height: Spacing.md);
+    final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
+    if (_keyboardWasOpen && !keyboardOpen) _lifted = false;
+    _keyboardWasOpen = keyboardOpen;
 
     // Card order: type (it sits beside the title there), title, category /
     // correspondent, amount-like fields, tags, then the dates.
@@ -180,28 +192,25 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
               for (final id in shownTags) _tagChip(context, tags[id], id),
             ],
           ),
-          // Search right in the field, no extra popup; hidden when every
-          // tag is already on the document.
-          if (tags.values.any(
-            (t) => !t.isInboxTag && !_tags.contains(t.id),
-          )) ...[
-            const SizedBox(height: Spacing.sm),
-            _keepVisible(
-              MetadataDropdown<Tag>(
-                key: ValueKey(_tags.length),
-                label: 'Tag hinzufügen',
-                value: null,
-                emptyLabel: '',
-                items: tags.values
-                    .where((t) => !t.isInboxTag && !_tags.contains(t.id))
-                    .toList(),
-                displayName: (t) => t.name,
-                onChanged: (t) {
-                  if (t != null) setState(() => _tags.add(t.id));
-                },
-              ),
+          // Search right in the field, no extra popup; an unknown name can be
+          // created as a new tag.
+          const SizedBox(height: Spacing.sm),
+          _keepVisible(
+            MetadataDropdown<Tag>(
+              key: ValueKey(_tags.length),
+              label: 'Tag hinzufügen',
+              value: null,
+              emptyLabel: '',
+              items: tags.values
+                  .where((t) => !t.isInboxTag && !_tags.contains(t.id))
+                  .toList(),
+              displayName: (t) => t.name,
+              onChanged: (t) {
+                if (t != null) setState(() => _tags.add(t.id));
+              },
+              onCreate: _createTag,
             ),
-          ],
+          ),
           gap,
           _keepVisible(
             _dateField(
@@ -224,9 +233,10 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
             onPressed: _saving ? null : _save,
             child: const Text('OK'),
           ),
-          // Room below the last field, so even the date fields can be
-          // scrolled up near the top above a tall keyboard.
-          SizedBox(height: MediaQuery.sizeOf(context).height * 0.45),
+          // Room below the last field while typing, so even the date fields
+          // can be scrolled up near the top above a tall keyboard.
+          if (_lifted || keyboardOpen)
+            SizedBox(height: MediaQuery.sizeOf(context).height * 0.8),
         ],
       ),
     );
@@ -237,13 +247,47 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
   /// (Scrolling after a dropdown opened would close it again.)
   Widget _keepVisible(Widget child) => Builder(
     builder: (fieldContext) => Listener(
-      // A jump, not an animation: the touch itself would cancel a scroll
-      // animation (it "holds" the list).
-      onPointerDown: (_) =>
-          Scrollable.ensureVisible(fieldContext, alignment: 0.02),
+      onPointerDown: (_) {
+        // The bottom room appears now (the keyboard isn't up yet) and goes
+        // again when the keyboard closes, or if none opens (calendar icon).
+        setState(() => _lifted = true);
+        _liftTimer?.cancel();
+        _liftTimer = Timer(const Duration(seconds: 1), () {
+          // Keep it while a field has focus (soft keyboard still coming,
+          // or a hardware keyboard); a bare scope = nothing focused.
+          if (mounted &&
+              MediaQuery.viewInsetsOf(context).bottom == 0 &&
+              FocusManager.instance.primaryFocus is FocusScopeNode) {
+            setState(() => _lifted = false);
+          }
+        });
+        // A jump, not an animation: the touch itself would cancel a scroll
+        // animation (it "holds" the list).
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (fieldContext.mounted) {
+            Scrollable.ensureVisible(fieldContext, alignment: 0.02);
+          }
+        });
+      },
       child: child,
     ),
   );
+
+  Future<void> _createTag(String name) async {
+    try {
+      final tag = await ref.read(paperlessApiProvider).createTag({
+        'name': name,
+      });
+      ref.invalidate(tagsProvider);
+      if (mounted) setState(() => _tags.add(tag.id));
+    } catch (e) {
+      if (!mounted) return;
+      showErrorBanner(
+        context,
+        'Tag anlegen fehlgeschlagen: ${friendlyApiMessage(e)}',
+      );
+    }
+  }
 
   /// The document's own custom fields plus the empty AI fields, AI fields
   /// first in DocSort's order.
@@ -397,26 +441,31 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
         return TextField(
           controller: _textFor(def.id, shown),
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: _dense(
-            InputDecoration(
-              labelText: def.name,
-              suffixText: '€',
-              prefixIcon: IconButton(
-                tooltip: negative
-                    ? 'Minus: du zahlst (tippen für Plus)'
-                    : 'Plus: du bekommst (tippen für Minus)',
-                visualDensity: VisualDensity.compact,
-                onPressed: () => setState(() {
-                  _negative[def.id] = !negative;
-                  _fieldValues.putIfAbsent(def.id, () => null);
-                }),
-                icon: Text(
-                  negative ? '−' : '+',
-                  style: Theme.of(context).textTheme.titleMedium,
+          decoration:
+              _dense(
+                InputDecoration(labelText: def.name, suffixText: '€'),
+              ).copyWith(
+                prefixIconConstraints: const BoxConstraints(minHeight: 36),
+                prefixIcon: IconButton(
+                  tooltip: negative
+                      ? 'Minus: du zahlst (tippen für Plus)'
+                      : 'Plus: du bekommst (tippen für Minus)',
+                  // Tight box: only a small gap to the number.
+                  padding: const EdgeInsets.only(left: 14, right: 3),
+                  constraints: const BoxConstraints(minHeight: 36),
+                  style: IconButton.styleFrom(
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  onPressed: () => setState(() {
+                    _negative[def.id] = !negative;
+                    _fieldValues.putIfAbsent(def.id, () => null);
+                  }),
+                  icon: Text(
+                    negative ? '−' : '+',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                 ),
               ),
-            ),
-          ),
         );
       case 'string':
       case 'url':

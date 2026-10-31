@@ -24,6 +24,11 @@ class MetadataDropdown<T> extends StatefulWidget {
   /// "add tag" field that resets after every pick).
   final String emptyLabel;
 
+  /// When set, typing a name that matches no item offers "Neu anlegen" and
+  /// hands the typed name here. Needs an empty [emptyLabel] (it reuses the
+  /// null entry).
+  final ValueChanged<String>? onCreate;
+
   const MetadataDropdown({
     super.key,
     required this.label,
@@ -33,7 +38,8 @@ class MetadataDropdown<T> extends StatefulWidget {
     required this.onChanged,
     this.suffix,
     this.emptyLabel = 'Keine Angabe',
-  });
+    this.onCreate,
+  }) : assert(onCreate == null || emptyLabel == '');
 
   @override
   State<MetadataDropdown<T>> createState() => _MetadataDropdownState<T>();
@@ -46,6 +52,10 @@ class _MetadataDropdownState<T> extends State<MetadataDropdown<T>> {
   @override
   void initState() {
     super.initState();
+    // The "create" entry depends on the typed text.
+    _controller.addListener(() {
+      if (widget.onCreate != null && mounted) setState(() {});
+    });
     // Select the current text on focus: typing then replaces it and filters
     // right away instead of appending to the old name.
     _focus.addListener(() {
@@ -83,12 +93,28 @@ class _MetadataDropdownState<T> extends State<MetadataDropdown<T>> {
         : null;
     final sorted = [...items]
       ..sort(
-        (a, b) =>
-            displayName(a).toLowerCase().compareTo(displayName(b).toLowerCase()),
+        (a, b) => displayName(
+          a,
+        ).toLowerCase().compareTo(displayName(b).toLowerCase()),
       );
+    final typed = _controller.text.trim();
+    final createLabel =
+        w.onCreate != null &&
+            typed.isNotEmpty &&
+            !items.any(
+              (i) => displayName(i).toLowerCase() == typed.toLowerCase(),
+            )
+        ? 'Neu anlegen: „$typed“'
+        : null;
     final entries = <DropdownMenuEntry<T?>>[
       if (emptyLabel.isNotEmpty)
-        DropdownMenuEntry<T?>(value: null, label: emptyLabel),
+        DropdownMenuEntry<T?>(value: null, label: emptyLabel)
+      else if (createLabel != null)
+        DropdownMenuEntry<T?>(
+          value: null,
+          label: createLabel,
+          leadingIcon: const Icon(Icons.add, size: 18),
+        ),
       for (final item in sorted)
         DropdownMenuEntry<T?>(value: item, label: displayName(item)),
     ];
@@ -104,6 +130,10 @@ class _MetadataDropdownState<T> extends State<MetadataDropdown<T>> {
         focusNode: _focus,
         initialSelection: effectiveValue,
         label: Text(label),
+        // Nothing left to pick: say how to make a new one.
+        hintText: w.onCreate != null && items.isEmpty
+            ? 'Namen tippen zum Neuanlegen'
+            : null,
         enabled: onChanged != null,
         enableFilter: true,
         enableSearch: true,
@@ -128,11 +158,21 @@ class _MetadataDropdownState<T> extends State<MetadataDropdown<T>> {
           if (q.isEmpty || text == selectedLabel) return entries;
           return [
             for (final e in entries)
-              if (e.value != null && e.label.toLowerCase().contains(q)) e,
+              if (e.label == createLabel ||
+                  (e.value != null && e.label.toLowerCase().contains(q)))
+                e,
           ];
         },
         dropdownMenuEntries: entries,
-        onSelected: onChanged,
+        onSelected: (v) {
+          if (v == null && createLabel != null) {
+            w.onCreate!(typed);
+            // The menu just put "Neu anlegen: …" into the field.
+            _controller.clear();
+          } else {
+            onChanged?.call(v);
+          }
+        },
       ),
     );
   }
