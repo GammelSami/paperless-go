@@ -202,7 +202,6 @@ class _CardStackState extends ConsumerState<_CardStack>
                   angle: progress * 0.06,
                   child: _InboxCard(
                     document: active,
-                    onTap: () => context.push('/documents/${active.id}'),
                     onAccept: () => _accept(active),
                     onEdit: () => _openEditSheet(active),
                     accepting: progress > 0.15,
@@ -284,13 +283,14 @@ class _CardStackState extends ConsumerState<_CardStack>
   }
 }
 
-/// Fork: Sam's layout. The page fills every pixel the info block doesn't need;
-/// the info block is as tall as its content (title and correspondent wrap,
-/// chips flow onto more lines) and only scrolls past 60 % of the card.
+/// Fork: Sam's layout. Everything above the button row is one big tap area
+/// for paging (right half = next page, left half = previous), so the thumb
+/// never has to reach the top. The info block is as tall as its content and
+/// only scrolls past 60 % of the card; the page gets everything else.
+/// Only the bottom row edits: pencil, the dates in the middle, or ✓ accepts.
 class _InboxCard extends ConsumerWidget {
   const _InboxCard({
     required this.document,
-    this.onTap,
     this.onAccept,
     this.onEdit,
     this.dimmed = false,
@@ -298,7 +298,6 @@ class _InboxCard extends ConsumerWidget {
   });
 
   final Document document;
-  final VoidCallback? onTap;
   final VoidCallback? onAccept;
   final VoidCallback? onEdit;
   final bool dimmed;
@@ -307,6 +306,26 @@ class _InboxCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = AppTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final fieldDefs = ref.watch(customFieldsProvider).valueOrNull ?? {};
+    final dateFields = [
+      for (final f in document.customFields)
+        if (fieldDefs[f.field] case final def?
+            when def.dataType == 'date' && f.value != null)
+          (def.name, DateTime.tryParse(f.value.toString())),
+    ];
+
+    Widget dateLine(IconData icon, String tooltip, DateTime? d) => Tooltip(
+      message: tooltip,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: tokens.inkSoft),
+          const SizedBox(width: Spacing.xs),
+          Text(d != null ? formatDate(d) : '—', style: text.bodyMedium),
+        ],
+      ),
+    );
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -327,41 +346,49 @@ class _InboxCard extends ConsumerWidget {
                   key: ValueKey(document.id),
                   document: document,
                   interactive: !dimmed,
-                ),
-              ),
-              ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: box.maxHeight * 0.6),
-                child: InkWell(
-                  onTap: onTap,
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(
-                      Spacing.lg,
-                      Spacing.md,
-                      Spacing.lg,
-                      Spacing.xs,
-                    ),
-                    child: _CardInfo(document: document),
-                  ),
+                  maxInfoHeight: box.maxHeight * 0.6,
+                  info: _CardInfo(document: document),
                 ),
               ),
               if (!dimmed)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(
-                    Spacing.lg,
+                    Spacing.sm,
                     0,
                     Spacing.lg,
                     Spacing.md,
                   ),
                   child: Row(
                     children: [
-                      IconButton.outlined(
+                      IconButton(
                         onPressed: onEdit,
                         tooltip: 'Bearbeiten',
                         iconSize: 28,
-                        padding: const EdgeInsets.all(Spacing.md),
                         icon: Icon(Icons.edit_outlined, color: tokens.stamp),
                       ),
-                      const Spacer(),
+                      Expanded(
+                        child: InkWell(
+                          onTap: onEdit,
+                          borderRadius: BorderRadius.circular(Radii.md),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: Spacing.sm,
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                dateLine(
+                                  Icons.event_outlined,
+                                  'Dokumentdatum',
+                                  document.created,
+                                ),
+                                for (final (name, d) in dateFields)
+                                  dateLine(Icons.alarm, name, d),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
                       IconButton.filled(
                         onPressed: onAccept,
                         tooltip: 'Annehmen',
@@ -380,8 +407,9 @@ class _InboxCard extends ConsumerWidget {
   }
 }
 
-/// Title, "Kategorie / Absender" + date, then document type, tags and custom
-/// fields as one flowing line of chips. Inbox tags are left out (redundant here).
+/// Document type written sideways along the left edge; next to it the title,
+/// "Kategorie / Absender", then non-date custom fields and finally the tags.
+/// Inbox tags are left out (redundant here); dates live in the button row.
 class _CardInfo extends ConsumerWidget {
   const _CardInfo({required this.document});
 
@@ -408,50 +436,55 @@ class _CardInfo extends ConsumerWidget {
     ];
     final fields = [
       for (final f in document.customFields)
-        if (fieldDefs[f.field] case final def? when f.value != null)
+        if (fieldDefs[f.field] case final def?
+            when f.value != null && def.dataType != 'date')
           _fieldLabel(f.value, def),
     ];
 
-    return Column(
+    final details = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(document.title, style: text.titleMedium),
-        const SizedBox(height: Spacing.xs),
-        // Path / correspondent is never wrapped by the date: the date sits at
-        // the right end when both fit on one line, otherwise it moves up onto
-        // its own line above (right-aligned), and the path gets the full width.
-        _OriginDateRow(
-          origin: origin.isEmpty ? 'Kein Absender' : origin,
-          originStyle: text.bodyMedium?.copyWith(
+        Text(document.title, style: text.titleSmall),
+        const SizedBox(height: 2),
+        Text(
+          origin.isEmpty ? 'Kein Absender' : origin,
+          style: text.bodySmall?.copyWith(
             color: origin.isEmpty ? tokens.inkSoft : null,
           ),
-          date: document.created != null ? formatDate(document.created!) : null,
-          dateStyle: text.bodyMedium?.copyWith(color: tokens.inkSoft),
         ),
-        const SizedBox(height: Spacing.sm),
-        Wrap(
-          spacing: Spacing.sm,
-          runSpacing: Spacing.xs,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            if (docType != null)
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.description_outlined,
-                    size: 16,
-                    color: tokens.inkSoft,
-                  ),
-                  const SizedBox(width: 2),
-                  Text(docType, style: text.bodyMedium),
-                ],
-              ),
-            for (final label in fields) _FieldChip(label: label),
-            for (final t in visibleTags) TagChip(tag: t),
-          ],
-        ),
+        if (fields.isNotEmpty || visibleTags.isNotEmpty) ...[
+          const SizedBox(height: Spacing.xs),
+          Wrap(
+            spacing: Spacing.xs,
+            runSpacing: Spacing.xs,
+            children: [
+              for (final label in fields) _FieldChip(label: label),
+              for (final t in visibleTags) TagChip(tag: t, dense: true),
+            ],
+          ),
+        ],
       ],
+    );
+    if (docType == null) return details;
+
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          RotatedBox(
+            quarterTurns: 3,
+            child: Text(
+              docType,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: text.labelSmall?.copyWith(color: tokens.inkSoft),
+            ),
+          ),
+          const SizedBox(width: Spacing.sm),
+          Expanded(child: details),
+        ],
+      ),
     );
   }
 
@@ -470,57 +503,6 @@ class _CardInfo extends ConsumerWidget {
   }
 }
 
-class _OriginDateRow extends StatelessWidget {
-  const _OriginDateRow({
-    required this.origin,
-    required this.originStyle,
-    required this.date,
-    required this.dateStyle,
-  });
-
-  final String origin;
-  final TextStyle? originStyle;
-  final String? date;
-  final TextStyle? dateStyle;
-
-  @override
-  Widget build(BuildContext context) {
-    final originText = Text(origin, style: originStyle);
-    final date = this.date;
-    if (date == null) return originText;
-    final dateText = Text(date, style: dateStyle);
-    return LayoutBuilder(
-      builder: (context, box) {
-        double widthOf(String s, TextStyle? style) => (TextPainter(
-          text: TextSpan(text: s, style: style),
-          textDirection: TextDirection.ltr,
-          textScaler: MediaQuery.textScalerOf(context),
-        )..layout()).width;
-        final fits =
-            widthOf(origin, originStyle) +
-                Spacing.md +
-                widthOf(date, dateStyle) <=
-            box.maxWidth;
-        if (fits) {
-          return Row(
-            children: [
-              Expanded(child: originText),
-              dateText,
-            ],
-          );
-        }
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Align(alignment: Alignment.centerRight, child: dateText),
-            originText,
-          ],
-        );
-      },
-    );
-  }
-}
-
 class _FieldChip extends StatelessWidget {
   const _FieldChip({required this.label});
 
@@ -530,28 +512,32 @@ class _FieldChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = AppTokens.of(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: Spacing.sm, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
       decoration: BoxDecoration(
         border: Border.all(color: tokens.line),
         borderRadius: BorderRadius.circular(Radii.pill),
       ),
-      child: Text(label, style: Theme.of(context).textTheme.bodySmall),
+      child: Text(label, style: Theme.of(context).textTheme.labelSmall),
     );
   }
 }
 
-/// Page preview with Tinder-style paging: tap the right half for the next
-/// page, the left half for the previous one. Shows the thumbnail until the
-/// PDF is downloaded; non-PDF originals stay on the thumbnail.
+/// Page preview plus [info] below it, as one tap area: tap the right half for
+/// the next page, the left half for the previous one (Tinder-style). Shows the
+/// thumbnail until the PDF is downloaded; non-PDF originals stay on it.
 class _PagedPreview extends ConsumerStatefulWidget {
   const _PagedPreview({
     super.key,
     required this.document,
     required this.interactive,
+    required this.info,
+    required this.maxInfoHeight,
   });
 
   final Document document;
   final bool interactive;
+  final Widget info;
+  final double maxInfoHeight;
 
   @override
   ConsumerState<_PagedPreview> createState() => _PagedPreviewState();
@@ -650,33 +636,51 @@ class _PagedPreviewState extends ConsumerState<_PagedPreview> {
                   : _page - 1,
             )
           : null,
-      child: Stack(
-        fit: StackFit.expand,
+      child: Column(
         children: [
-          ColoredBox(color: tokens.paper, child: image),
-          if (count > 1)
-            Positioned(
-              top: Spacing.sm,
-              left: Spacing.sm,
-              right: Spacing.sm,
-              child: Row(
-                children: [
-                  for (var i = 1; i <= count; i++)
-                    Expanded(
-                      child: Container(
-                        height: 4,
-                        margin: const EdgeInsets.symmetric(horizontal: 2),
-                        decoration: BoxDecoration(
-                          color: i == _page
-                              ? Colors.black54
-                              : Colors.black.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
+          Expanded(
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                ColoredBox(color: tokens.paper, child: image),
+                if (count > 1)
+                  Positioned(
+                    top: Spacing.sm,
+                    left: Spacing.sm,
+                    right: Spacing.sm,
+                    child: Row(
+                      children: [
+                        for (var i = 1; i <= count; i++)
+                          Expanded(
+                            child: Container(
+                              height: 4,
+                              margin: const EdgeInsets.symmetric(horizontal: 2),
+                              decoration: BoxDecoration(
+                                color: i == _page
+                                    ? Colors.black54
+                                    : Colors.black.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
-                ],
-              ),
+                  ),
+              ],
             ),
+          ),
+          ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: widget.maxInfoHeight),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(
+                Spacing.md,
+                Spacing.sm,
+                Spacing.lg,
+                Spacing.xs,
+              ),
+              child: widget.info,
+            ),
+          ),
         ],
       ),
     );
