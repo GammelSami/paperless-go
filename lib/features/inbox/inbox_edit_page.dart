@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -45,11 +43,6 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
   /// Amount sign per monetary field (true = minus = you pay).
   final Map<int, bool> _negative = {};
 
-  /// A field was just touched: keep the bottom room (see build) until the
-  /// keyboard is up.
-  bool _lifted = false;
-  bool _keyboardWasOpen = false;
-  Timer? _liftTimer;
   late final Future<List<DateTime>> _suggestedDates;
   bool _saving = false;
 
@@ -82,7 +75,6 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
     for (final c in _fieldText.values) {
       c.dispose();
     }
-    _liftTimer?.cancel();
     super.dispose();
   }
 
@@ -103,28 +95,22 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
     final fieldDefs = ref.watch(customFieldsProvider).valueOrNull ?? {};
     final shownTags = _tags.where((id) => !(tags[id]?.isInboxTag ?? false));
     final fields = _shownFields(fieldDefs);
+    final amount = fields
+        .where((d) => d.name == 'Betrag' && d.dataType == 'monetary')
+        .firstOrNull;
+    final done = fields
+        .where((d) => d.name == 'Erledigt' && d.dataType == 'boolean')
+        .firstOrNull;
+    final deadline = fields
+        .where((d) => d.name == 'Frist' && d.dataType == 'date')
+        .firstOrNull;
     const gap = SizedBox(height: Spacing.md);
-    final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
-    if (_keyboardWasOpen && !keyboardOpen) _lifted = false;
-    _keyboardWasOpen = keyboardOpen;
 
-    // Card order: type (it sits beside the title there), title, category /
-    // correspondent, amount-like fields, tags, then the dates.
     return Scaffold(
       appBar: AppBar(title: const Text('Bearbeiten')),
       body: ListView(
         padding: const EdgeInsets.all(Spacing.lg),
         children: [
-          _keepVisible(
-            MetadataDropdown<DocumentType>(
-              label: 'Typ',
-              value: docTypes[_documentTypeId],
-              items: docTypes.values.toList(),
-              displayName: (dt) => dt.name,
-              onChanged: (dt) => setState(() => _documentTypeId = dt?.id),
-            ),
-          ),
-          gap,
           // Grows with the title, never cut off; no line breaks, so no
           // empty lines (Enter closes the keyboard instead).
           _keepVisible(
@@ -158,33 +144,36 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
               onChanged: (c) => setState(() => _correspondentId = c?.id),
             ),
           ),
-          // Amount and done side by side, a little faded: secondary info,
-          // like the small chips on the card.
-          if (fields.any((d) => d.dataType != 'date')) ...[
-            gap,
-            Opacity(
-              opacity: 0.8,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children:
-                    [
-                          for (final def in fields)
-                            if (def.dataType != 'date')
-                              def.dataType == 'boolean'
-                                  ? _customField(context, def)
-                                  : Expanded(
-                                      child: _keepVisible(
-                                        _customField(context, def),
-                                      ),
-                                    ),
-                        ]
-                        .expand((w) => [w, const SizedBox(width: Spacing.md)])
-                        .toList()
-                      ..removeLast(),
-              ),
-            ),
-          ],
           gap,
+          Row(
+            children: [
+              if (amount != null) ...[
+                Expanded(
+                  child: _keepVisible(
+                    _customField(context, amount),
+                    ignoreLeadingTap: true,
+                  ),
+                ),
+                const SizedBox(width: Spacing.md),
+              ],
+              Expanded(
+                child: _keepVisible(
+                  MetadataDropdown<DocumentType>(
+                    label: 'Typ',
+                    value: docTypes[_documentTypeId],
+                    items: docTypes.values.toList(),
+                    displayName: (dt) => dt.name,
+                    onChanged: (dt) => setState(() => _documentTypeId = dt?.id),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          for (final def in fields)
+            if (def != amount && def != done && def.dataType != 'date') ...[
+              gap,
+              _keepVisible(_customField(context, def)),
+            ],
           Wrap(
             spacing: Spacing.xs,
             runSpacing: Spacing.xs,
@@ -192,85 +181,98 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
               for (final id in shownTags) _tagChip(context, tags[id], id),
             ],
           ),
-          // Search right in the field, no extra popup; an unknown name can be
-          // created as a new tag.
-          const SizedBox(height: Spacing.sm),
-          _keepVisible(
-            MetadataDropdown<Tag>(
-              key: ValueKey(_tags.length),
-              label: 'Tag hinzufügen',
-              value: null,
-              emptyLabel: '',
-              items: tags.values
-                  .where((t) => !t.isInboxTag && !_tags.contains(t.id))
-                  .toList(),
-              displayName: (t) => t.name,
-              onChanged: (t) {
-                if (t != null) setState(() => _tags.add(t.id));
-              },
-              onCreate: _createTag,
-            ),
-          ),
           gap,
-          _keepVisible(
-            _dateField(
-              context,
-              _date,
-              'Dokumentdatum',
-              icon: Icons.description_outlined,
-              onPicked: (d) => setState(() => _date.text = formatDate(d)),
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: _keepVisible(
+                  _dateField(
+                    context,
+                    _date,
+                    'Datum',
+                    icon: Icons.description_outlined,
+                    onPicked: (d) => setState(() => _date.text = formatDate(d)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: Spacing.md),
+              Expanded(
+                child: _keepVisible(
+                  MetadataDropdown<Tag>(
+                    key: ValueKey(_tags.length),
+                    label: 'Tag hinzufügen',
+                    value: null,
+                    emptyLabel: '',
+                    items: tags.values
+                        .where((t) => !t.isInboxTag && !_tags.contains(t.id))
+                        .toList(),
+                    displayName: (t) => t.name,
+                    onChanged: (t) {
+                      if (t != null) setState(() => _tags.add(t.id));
+                    },
+                    onCreate: _createTag,
+                  ),
+                ),
+              ),
+            ],
           ),
           _suggestions(_date),
+          if (deadline != null) ...[
+            gap,
+            Row(
+              children: [
+                Expanded(child: _keepVisible(_customField(context, deadline))),
+                if (done != null) ...[
+                  const SizedBox(width: Spacing.md),
+                  _customField(context, done),
+                ],
+              ],
+            ),
+            _suggestions(_textFor(deadline.id, _initialDate(deadline.id))),
+          ],
           for (final def in fields)
-            if (def.dataType == 'date') ...[
+            if (def.dataType == 'date' && def != deadline) ...[
               gap,
               _keepVisible(_customField(context, def)),
               _suggestions(_textFor(def.id, _initialDate(def.id))),
             ],
+          if (done != null && deadline == null) ...[
+            gap,
+            _customField(context, done),
+          ],
           const SizedBox(height: Spacing.lg),
           FilledButton(
             onPressed: _saving ? null : _save,
             child: const Text('OK'),
           ),
-          // Room below the last field while typing, so even the date fields
-          // can be scrolled up near the top above a tall keyboard.
-          if (_lifted || keyboardOpen)
-            SizedBox(height: MediaQuery.sizeOf(context).height * 0.8),
+          // Room to move the last field before its dropdown or keyboard opens.
+          SizedBox(height: MediaQuery.sizeOf(context).height * 0.8),
         ],
       ),
     );
   }
 
-  /// On touch, scroll the field near the top before anything opens: the
-  /// keyboard then never covers it and suggestion lists have room below.
-  /// (Scrolling after a dropdown opened would close it again.)
-  Widget _keepVisible(Widget child) => Builder(
-    builder: (fieldContext) => Listener(
-      onPointerDown: (_) {
-        // The bottom room appears now (the keyboard isn't up yet) and goes
-        // again when the keyboard closes, or if none opens (calendar icon).
-        setState(() => _lifted = true);
-        _liftTimer?.cancel();
-        _liftTimer = Timer(const Duration(seconds: 1), () {
-          // Keep it while a field has focus (soft keyboard still coming,
-          // or a hardware keyboard); a bare scope = nothing focused.
-          if (mounted &&
-              MediaQuery.viewInsetsOf(context).bottom == 0 &&
-              FocusManager.instance.primaryFocus is FocusScopeNode) {
-            setState(() => _lifted = false);
+  /// A pointer-up from a tap arrives before the dropdown's tap callback.
+  /// Ignore drags so scrolling the page never jumps to a field.
+  Widget _keepVisible(Widget child, {bool ignoreLeadingTap = false}) => Builder(
+    builder: (fieldContext) {
+      Offset? down;
+      return Listener(
+        onPointerDown: (event) => down = event.localPosition,
+        onPointerCancel: (_) => down = null,
+        onPointerUp: (event) {
+          final start = down;
+          down = null;
+          if (start == null ||
+              (event.localPosition - start).distance > 8 ||
+              (ignoreLeadingTap && start.dx < 40)) {
+            return;
           }
-        });
-        // A jump, not an animation: the touch itself would cancel a scroll
-        // animation (it "holds" the list).
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (fieldContext.mounted) {
-            Scrollable.ensureVisible(fieldContext, alignment: 0.02);
-          }
-        });
-      },
-      child: child,
-    ),
+          Scrollable.ensureVisible(fieldContext, alignment: 0.02);
+        },
+        child: child,
+      );
+    },
   );
 
   Future<void> _createTag(String name) async {
