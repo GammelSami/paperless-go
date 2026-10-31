@@ -605,7 +605,7 @@ class _PackedTags extends StatelessWidget {
   /// Inner padding (text to pill edge) and outer gap (pill to pill) are one
   /// value, so the space inside and between pills looks the same.
   static const _minSpace = 4.0;
-  static const _maxSpace = 8.0;
+  static const _maxSpace = 10.0;
 
   @override
   Widget build(BuildContext context) {
@@ -623,33 +623,42 @@ class _PackedTags extends StatelessWidget {
             )..layout()).width +
             2 * InboxTagChip.borderWidth;
 
-        // Pack with the smallest spacing: longest first, first line it fits.
-        const m = _minSpace;
-        final sorted = [...tags]..sort((a, b) => core(b).compareTo(core(a)));
-        final lines = <List<Tag>>[];
-        final cores = <double>[];
-        bool fits(int j, double c) =>
-            cores[j] + c + (3 * (lines[j].length + 1) - 1) * m <= box.maxWidth;
-        for (final t in sorted) {
-          final c = core(t);
-          final j = [
-            for (var j = 0; j < lines.length; j++)
-              if (fits(j, c)) j,
-          ].firstOrNull;
-          if (j == null) {
-            lines.add([t]);
-            cores.add(c);
-          } else {
+        // Balance instead of fill: find the fewest lines that fit, deal the
+        // tags out longest-first onto the currently shortest line (so lines
+        // end up about equally full), then give every pill the same spacing,
+        // as much as the fullest line allows. No squeezed line above an
+        // almost empty one.
+        final cs = {for (final t in tags) t: core(t)};
+        final sorted = [...tags]..sort((a, b) => cs[b]!.compareTo(cs[a]!));
+        double need(double c, int n) => c + (3 * n - 1) * _minSpace;
+        var lines = <List<Tag>>[];
+        var cores = <double>[];
+        for (var count = 1; count <= tags.length; count++) {
+          lines = [for (var j = 0; j < count; j++) <Tag>[]];
+          cores = List.filled(count, 0.0);
+          for (final t in sorted) {
+            var j = 0;
+            for (var k = 1; k < count; k++) {
+              if (need(cores[k], lines[k].length) <
+                  need(cores[j], lines[j].length)) {
+                j = k;
+              }
+            }
             lines[j].add(t);
-            cores[j] += c;
+            cores[j] += cs[t]!;
           }
+          final fitsAll = [
+            for (var j = 0; j < count; j++)
+              need(cores[j], lines[j].length) <= box.maxWidth,
+          ].every((ok) => ok);
+          if (fitsAll) break;
         }
 
-        // One spacing for everything: a line of n pills has 2n paddings and
-        // n-1 gaps; the tightest line decides how much there is to share.
+        // A line of n pills has 2n paddings and n-1 gaps, all equal.
         final space = [
           for (var j = 0; j < lines.length; j++)
-            (box.maxWidth - cores[j]) / (3 * lines[j].length - 1),
+            if (lines[j].isNotEmpty)
+              (box.maxWidth - cores[j]) / (3 * lines[j].length - 1),
         ].reduce((a, b) => a < b ? a : b).clamp(_minSpace, _maxSpace);
 
         return Column(
