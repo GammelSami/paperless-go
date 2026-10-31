@@ -271,9 +271,16 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
             onPressed: _saving ? null : _save,
             child: const Text('OK'),
           ),
-          // Room while opening a dropdown or typing; gone with the keyboard.
-          if (_lifted || keyboardOpen)
-            SizedBox(height: MediaQuery.sizeOf(context).height * 0.8),
+          // Open immediately for dropdowns; shrink smoothly after typing.
+          AnimatedContainer(
+            duration: _lifted || keyboardOpen
+                ? Duration.zero
+                : const Duration(milliseconds: 240),
+            curve: Curves.easeOutCubic,
+            height: _lifted || keyboardOpen
+                ? MediaQuery.sizeOf(context).height * 0.8
+                : 0,
+          ),
         ],
       ),
     );
