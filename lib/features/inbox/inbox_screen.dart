@@ -443,6 +443,9 @@ class _InboxCard extends ConsumerWidget {
 class _CardInfo extends ConsumerWidget {
   const _CardInfo({required this.document});
 
+  /// Same space left and right of the sideways type.
+  static const _labelGap = 10.0;
+
   final Document document;
 
   @override
@@ -493,15 +496,26 @@ class _CardInfo extends ConsumerWidget {
         ],
       ],
     );
-    if (docType == null) return details;
+    // Info inset is 10 (see _PagedPreview); without the sideways type the
+    // text gets the card's normal 16.
+    if (docType == null) {
+      return Padding(
+        padding: const EdgeInsets.only(left: _CardStyle.edge - _labelGap),
+        child: details,
+      );
+    }
 
     // Sideways label in a Stack (not IntrinsicHeight, which can't measure the
     // LayoutBuilder in the tag block): it spans exactly the details' height.
     const labelWidth = 16.0;
+    final rule = Container(
+      height: 1.5,
+      color: tokens.inkSoft.withValues(alpha: 0.45),
+    );
     return Stack(
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: labelWidth + Spacing.md),
+          padding: const EdgeInsets.only(left: labelWidth + _labelGap),
           child: details,
         ),
         Positioned(
@@ -515,7 +529,7 @@ class _CardInfo extends ConsumerWidget {
             quarterTurns: 3,
             child: Row(
               children: [
-                Expanded(child: Container(height: 1, color: tokens.line)),
+                Expanded(child: rule),
                 Flexible(
                   flex: 0,
                   child: Padding(
@@ -534,7 +548,7 @@ class _CardInfo extends ConsumerWidget {
                     ),
                   ),
                 ),
-                Expanded(child: Container(height: 1, color: tokens.line)),
+                Expanded(child: rule),
               ],
             ),
           ),
@@ -853,7 +867,7 @@ class _PagedPreviewState extends ConsumerState<_PagedPreview> {
             constraints: BoxConstraints(maxHeight: widget.maxInfoHeight),
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(
-                _CardStyle.edge,
+                _CardInfo._labelGap,
                 _CardStyle.block,
                 _CardStyle.edge,
                 _CardStyle.block,
