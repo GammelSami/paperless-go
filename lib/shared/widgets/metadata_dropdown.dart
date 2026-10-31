@@ -28,6 +28,7 @@ class MetadataDropdown<T> extends StatefulWidget {
   /// hands the typed name here. Needs an empty [emptyLabel] (it reuses the
   /// null entry).
   final ValueChanged<String>? onCreate;
+  final MenuController? menuController;
 
   const MetadataDropdown({
     super.key,
@@ -39,6 +40,7 @@ class MetadataDropdown<T> extends StatefulWidget {
     this.suffix,
     this.emptyLabel = 'Keine Angabe',
     this.onCreate,
+    this.menuController,
   }) : assert(onCreate == null || emptyLabel == '');
 
   @override
@@ -126,6 +128,7 @@ class _MetadataDropdownState<T> extends State<MetadataDropdown<T>> {
     // weight, same height as the other compact fields.
     return LayoutBuilder(
       builder: (context, box) => DropdownMenu<T?>(
+        menuController: w.menuController,
         controller: _controller,
         focusNode: _focus,
         initialSelection: effectiveValue,

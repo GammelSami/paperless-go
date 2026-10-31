@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -42,7 +44,15 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
 
   /// Amount sign per monetary field (true = minus = you pay).
   final Map<int, bool> _negative = {};
+  final _typeMenu = MenuController();
+  final _categoryMenu = MenuController();
+  final _correspondentMenu = MenuController();
+  final _tagMenu = MenuController();
 
+  final Map<int, Offset> _pointerStarts = {};
+  bool _lifted = false;
+  bool _keyboardWasOpen = false;
+  Timer? _liftTimer;
   late final Future<List<DateTime>> _suggestedDates;
   bool _saving = false;
 
@@ -75,6 +85,7 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
     for (final c in _fieldText.values) {
       c.dispose();
     }
+    _liftTimer?.cancel();
     super.dispose();
   }
 
@@ -105,6 +116,12 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
         .where((d) => d.name == 'Frist' && d.dataType == 'date')
         .firstOrNull;
     const gap = SizedBox(height: Spacing.md);
+    final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
+    if (_keyboardWasOpen && !keyboardOpen) {
+      _liftTimer?.cancel();
+      _lifted = false;
+    }
+    _keyboardWasOpen = keyboardOpen;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Bearbeiten')),
@@ -127,22 +144,26 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
           gap,
           _keepVisible(
             MetadataDropdown<StoragePath>(
+              menuController: _categoryMenu,
               label: 'Kategorie',
               value: storagePaths[_storagePathId],
               items: storagePaths.values.toList(),
               displayName: (sp) => sp.name,
               onChanged: (sp) => setState(() => _storagePathId = sp?.id),
             ),
+            menuController: _categoryMenu,
           ),
           gap,
           _keepVisible(
             MetadataDropdown<Correspondent>(
+              menuController: _correspondentMenu,
               label: 'Absender',
               value: correspondents[_correspondentId],
               items: correspondents.values.toList(),
               displayName: (c) => c.name,
               onChanged: (c) => setState(() => _correspondentId = c?.id),
             ),
+            menuController: _correspondentMenu,
           ),
           gap,
           Row(
@@ -159,12 +180,14 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
               Expanded(
                 child: _keepVisible(
                   MetadataDropdown<DocumentType>(
+                    menuController: _typeMenu,
                     label: 'Typ',
                     value: docTypes[_documentTypeId],
                     items: docTypes.values.toList(),
                     displayName: (dt) => dt.name,
                     onChanged: (dt) => setState(() => _documentTypeId = dt?.id),
                   ),
+                  menuController: _typeMenu,
                 ),
               ),
             ],
@@ -200,6 +223,7 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
                 flex: 17,
                 child: _keepVisible(
                   MetadataDropdown<Tag>(
+                    menuController: _tagMenu,
                     key: ValueKey(_tags.length),
                     label: 'Tag hinzufügen',
                     value: null,
@@ -213,6 +237,7 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
                     },
                     onCreate: _createTag,
                   ),
+                  menuController: _tagMenu,
                 ),
               ),
             ],
@@ -246,8 +271,9 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
             onPressed: _saving ? null : _save,
             child: const Text('OK'),
           ),
-          // Room to move the last field before its dropdown or keyboard opens.
-          SizedBox(height: MediaQuery.sizeOf(context).height * 0.8),
+          // Room while opening a dropdown or typing; gone with the keyboard.
+          if (_lifted || keyboardOpen)
+            SizedBox(height: MediaQuery.sizeOf(context).height * 0.8),
         ],
       ),
     );
@@ -255,21 +281,51 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
 
   /// A pointer-up from a tap arrives before the dropdown's tap callback.
   /// Ignore drags so scrolling the page never jumps to a field.
-  Widget _keepVisible(Widget child, {bool ignoreLeadingTap = false}) => Builder(
+  Widget _keepVisible(
+    Widget child, {
+    bool ignoreLeadingTap = false,
+    MenuController? menuController,
+  }) => Builder(
     builder: (fieldContext) {
-      Offset? down;
       return Listener(
-        onPointerDown: (event) => down = event.localPosition,
-        onPointerCancel: (_) => down = null,
+        onPointerDown: (event) {
+          _pointerStarts[event.pointer] = event.localPosition;
+          if (ignoreLeadingTap && event.localPosition.dx < 40) return;
+          setState(() => _lifted = true);
+          _liftTimer?.cancel();
+          _liftTimer = Timer(const Duration(seconds: 1), () {
+            if (mounted && _lifted) setState(() => _lifted = false);
+          });
+        },
+        onPointerCancel: (event) {
+          _pointerStarts.remove(event.pointer);
+          _liftTimer?.cancel();
+          if (MediaQuery.viewInsetsOf(context).bottom == 0) {
+            setState(() => _lifted = false);
+          }
+        },
         onPointerUp: (event) {
-          final start = down;
-          down = null;
-          if (start == null ||
-              (event.localPosition - start).distance > 8 ||
-              (ignoreLeadingTap && start.dx < 40)) {
+          final start = _pointerStarts.remove(event.pointer);
+          if (start == null || (event.localPosition - start).distance > 8) {
+            _liftTimer?.cancel();
+            if (MediaQuery.viewInsetsOf(context).bottom == 0) {
+              setState(() => _lifted = false);
+            }
             return;
           }
-          Scrollable.ensureVisible(fieldContext, alignment: 0.02);
+          if (ignoreLeadingTap && start.dx < 40) return;
+          if (menuController == null) {
+            Scrollable.ensureVisible(fieldContext, alignment: 0.02);
+            return;
+          }
+          if (menuController.isOpen) return;
+          // The spacer is laid out next frame. Scrolling may close the menu
+          // opened by this tap, so open it again after the jump.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!fieldContext.mounted) return;
+            Scrollable.ensureVisible(fieldContext, alignment: 0.02);
+            menuController.open();
+          });
         },
         child: child,
       );

@@ -50,6 +50,35 @@ void main() {
       expect(selected, 'Banana');
     });
 
+    testWidgets('external controller reopens the menu', (tester) async {
+      final controller = MenuController();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MetadataDropdown<String>(
+              label: 'Fruit',
+              value: null,
+              items: const ['Apple'],
+              displayName: (s) => s,
+              onChanged: (_) {},
+              menuController: controller,
+            ),
+          ),
+        ),
+      );
+
+      controller.open();
+      await tester.pumpAndSettle();
+      expect(controller.isOpen, isTrue);
+      expect(find.text('Apple'), findsWidgets);
+      controller.close();
+      await tester.pumpAndSettle();
+      expect(controller.isOpen, isFalse);
+      controller.open();
+      await tester.pumpAndSettle();
+      expect(controller.isOpen, isTrue);
+    });
+
     testWidgets('is disabled when onChanged is null', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
