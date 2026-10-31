@@ -486,7 +486,7 @@ class _CardInfo extends ConsumerWidget {
           const SizedBox(height: _CardStyle.block),
           if (fields.isNotEmpty)
             Wrap(
-              spacing: _CardStyle.gap,
+              spacing: _CardStyle.chipPadH,
               runSpacing: _CardStyle.gap,
               children: [for (final label in fields) _FieldChip(label: label)],
             ),
@@ -512,6 +512,28 @@ class _CardInfo extends ConsumerWidget {
       height: 1.5,
       color: tokens.inkSoft.withValues(alpha: 0.45),
     );
+    // The rule starts at the title's cap height and ends on the last tag's
+    // edge (or the origin's baseline when there are no chips), not at the
+    // line boxes, whose built-in leading would make it overshoot.
+    TextPainter line(String t, TextStyle? st) => TextPainter(
+      text: TextSpan(text: t, style: st),
+      textDirection: TextDirection.ltr,
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    const interCapHeight = 0.727; // Inter: capHeight 1490 / unitsPerEm 2048
+    final titleStyle = _CardStyle.title(context);
+    final titleLine = line(document.title, titleStyle);
+    final top =
+        titleLine.computeDistanceToActualBaseline(TextBaseline.alphabetic) -
+        MediaQuery.textScalerOf(context).scale(titleStyle?.fontSize ?? 16) *
+            interCapHeight;
+    final metaLine = line(origin, _CardStyle.meta(context));
+    final bottom = fields.isNotEmpty || visibleTags.isNotEmpty
+        ? 0.0
+        : metaLine.height -
+              metaLine.computeDistanceToActualBaseline(TextBaseline.alphabetic);
+
     return Stack(
       children: [
         Padding(
@@ -520,8 +542,8 @@ class _CardInfo extends ConsumerWidget {
         ),
         Positioned(
           left: 0,
-          top: 0,
-          bottom: 0,
+          top: top,
+          bottom: bottom,
           width: labelWidth,
           // Rule – type – rule, turned upright: marks the info block from the
           // title to the last tag, with the type centred in the line.
@@ -580,9 +602,10 @@ class _PackedTags extends StatelessWidget {
 
   final List<Tag> tags;
 
-  static const _gap = _CardStyle.gap;
-  static const _basePad = _CardStyle.chipPadH;
-  static const _maxExtra = 10.0;
+  /// Inner padding (text to pill edge) and outer gap (pill to pill) are one
+  /// value, so the space inside and between pills looks the same.
+  static const _minSpace = 4.0;
+  static const _maxSpace = 8.0;
 
   @override
   Widget build(BuildContext context) {
@@ -590,54 +613,56 @@ class _PackedTags extends StatelessWidget {
     final scaler = MediaQuery.textScalerOf(context);
     return LayoutBuilder(
       builder: (context, box) {
-        double natural(Tag t) =>
+        // Width of a pill without its horizontal padding.
+        double core(Tag t) =>
             (TextPainter(
               text: TextSpan(text: t.name, style: style),
               textDirection: TextDirection.ltr,
               textScaler: scaler,
               maxLines: 1,
             )..layout()).width +
-            2 * _basePad +
             2 * InboxTagChip.borderWidth;
 
-        final sorted = [...tags]
-          ..sort((a, b) => natural(b).compareTo(natural(a)));
-        final lines = <List<(Tag, double)>>[];
-        final used = <double>[];
+        // Pack with the smallest spacing: longest first, first line it fits.
+        const m = _minSpace;
+        final sorted = [...tags]..sort((a, b) => core(b).compareTo(core(a)));
+        final lines = <List<Tag>>[];
+        final cores = <double>[];
+        bool fits(int j, double c) =>
+            cores[j] + c + (3 * (lines[j].length + 1) - 1) * m <= box.maxWidth;
         for (final t in sorted) {
-          final w = natural(t).clamp(0.0, box.maxWidth);
-          final i = [
+          final c = core(t);
+          final j = [
             for (var j = 0; j < lines.length; j++)
-              if (used[j] + _gap + w <= box.maxWidth) j,
+              if (fits(j, c)) j,
           ].firstOrNull;
-          if (i == null) {
-            lines.add([(t, w)]);
-            used.add(w);
+          if (j == null) {
+            lines.add([t]);
+            cores.add(c);
           } else {
-            lines[i].add((t, w));
-            used[i] += _gap + w;
+            lines[j].add(t);
+            cores[j] += c;
           }
         }
 
-        // One extra padding for every chip: the tightest line decides, so
-        // all chips stay the same style (no squeezed line above a stretched
-        // one). Lines may then end slightly ragged, which reads calmer.
-        final extra = [
+        // One spacing for everything: a line of n pills has 2n paddings and
+        // n-1 gaps; the tightest line decides how much there is to share.
+        final space = [
           for (var j = 0; j < lines.length; j++)
-            (box.maxWidth - used[j]) / lines[j].length / 2,
-        ].reduce((a, b) => a < b ? a : b).clamp(0.0, _maxExtra);
+            (box.maxWidth - cores[j]) / (3 * lines[j].length - 1),
+        ].reduce((a, b) => a < b ? a : b).clamp(_minSpace, _maxSpace);
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             for (var j = 0; j < lines.length; j++)
               Padding(
-                padding: EdgeInsets.only(top: j == 0 ? 0 : _gap),
+                padding: EdgeInsets.only(top: j == 0 ? 0 : _CardStyle.gap),
                 child: Row(
                   children: [
-                    for (final (i, (t, _)) in lines[j].indexed) ...[
-                      if (i > 0) const SizedBox(width: _gap),
-                      InboxTagChip(tag: t, hPad: _basePad + extra),
+                    for (final (i, t) in lines[j].indexed) ...[
+                      if (i > 0) SizedBox(width: space),
+                      InboxTagChip(tag: t, hPad: space),
                     ],
                   ],
                 ),
