@@ -51,6 +51,7 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
 
   final Map<int, Offset> _pointerStarts = {};
   bool _lifted = false;
+  bool _dropdownLift = false;
   bool _keyboardWasOpen = false;
   Timer? _liftTimer;
   late final Future<List<DateTime>> _suggestedDates;
@@ -117,6 +118,7 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
         .firstOrNull;
     const gap = SizedBox(height: Spacing.md);
     final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
+    if (keyboardOpen) _dropdownLift = false;
     if (_keyboardWasOpen && !keyboardOpen) {
       _liftTimer?.cancel();
       _lifted = false;
@@ -197,6 +199,7 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
               gap,
               _keepVisible(_customField(context, def)),
             ],
+          const SizedBox(height: Spacing.sm),
           Wrap(
             spacing: Spacing.xs,
             runSpacing: Spacing.xs,
@@ -271,9 +274,9 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
             onPressed: _saving ? null : _save,
             child: const Text('OK'),
           ),
-          // Open immediately for dropdowns; shrink smoothly after typing.
+          // Dropdowns need room before opening; animate for the keyboard.
           AnimatedContainer(
-            duration: _lifted || keyboardOpen
+            duration: _dropdownLift && !keyboardOpen
                 ? Duration.zero
                 : const Duration(milliseconds: 240),
             curve: Curves.easeOutCubic,
@@ -298,7 +301,10 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
         onPointerDown: (event) {
           _pointerStarts[event.pointer] = event.localPosition;
           if (ignoreLeadingTap && event.localPosition.dx < 40) return;
-          setState(() => _lifted = true);
+          setState(() {
+            _lifted = true;
+            _dropdownLift = menuController != null;
+          });
           _liftTimer?.cancel();
           _liftTimer = Timer(const Duration(seconds: 1), () {
             if (mounted && _lifted) setState(() => _lifted = false);
@@ -322,7 +328,12 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
           }
           if (ignoreLeadingTap && start.dx < 40) return;
           if (menuController == null) {
-            Scrollable.ensureVisible(fieldContext, alignment: 0.02);
+            Scrollable.ensureVisible(
+              fieldContext,
+              alignment: 0.02,
+              duration: const Duration(milliseconds: 240),
+              curve: Curves.easeOutCubic,
+            );
             return;
           }
           if (menuController.isOpen) return;
