@@ -37,7 +37,11 @@ void main() {
                   onTap: () => pages++,
                   child: InboxDocumentZoom(
                     image: provider,
-                    child: Image(image: provider, fit: BoxFit.cover),
+                    child: Image(
+                      image: provider,
+                      fit: BoxFit.fitWidth,
+                      alignment: Alignment.topCenter,
+                    ),
                   ),
                 ),
               ),
@@ -55,6 +59,8 @@ void main() {
     await tester.pumpAndSettle();
     final preview = find.byType(InboxDocumentZoom);
     final center = tester.getCenter(preview);
+    final source = tester.getRect(preview);
+    final restingPage = source.topLeft & Size(source.width, source.width * 2);
     final zoom = find.byKey(const ValueKey('document-zoom-image'));
     final dim = find.byKey(const ValueKey('document-zoom-dim'));
 
@@ -81,6 +87,32 @@ void main() {
     );
     await tester.pump();
     expect(zoom, findsOneWidget);
+    expect(
+      tester.getRect(zoom),
+      restingPage,
+      reason: 'The very first zoom frame must match the inline document.',
+    );
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(
+      tester.getRect(zoom),
+      restingPage,
+      reason: 'Holding still must not run an opening animation.',
+    );
+    await first.moveBy(const Offset(-2, 0));
+    await second.moveBy(const Offset(2, 0));
+    await tester.pump();
+    const firstScale = 64 / 60;
+    final anchored =
+        (center - (center - restingPage.topLeft) * firstScale) &
+        (restingPage.size * firstScale);
+    expect(
+      tester.getRect(zoom),
+      rectMoreOrLessEquals(anchored),
+      reason: 'Even the first small movement must follow the fingers exactly.',
+    );
+    final held = tester.getRect(zoom);
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(tester.getRect(zoom), held);
     await first.moveBy(const Offset(-25, 0));
     await second.moveBy(const Offset(25, 0));
     await tester.pump();
@@ -119,10 +151,8 @@ void main() {
     await tester.pumpAndSettle();
     final fitted = tester.getRect(zoom);
     expect(fitted.width, lessThan(enlarged.width));
-    expect(fitted.left, greaterThanOrEqualTo(0));
-    expect(fitted.top, greaterThanOrEqualTo(0));
-    expect(fitted.right, lessThanOrEqualTo(800));
-    expect(fitted.bottom, lessThanOrEqualTo(600));
+    expect(fitted.width, closeTo(source.width, 0.001));
+    expect(fitted.height / fitted.width, closeTo(2, 0.001));
 
     await tester.tapAt(const Offset(400, 300));
     await tester.pump();

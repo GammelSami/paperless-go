@@ -1,5 +1,9 @@
+import 'dart:math' as math;
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+
+import '../../core/design_tokens.dart';
 
 /// A persistent pinch preview above the card's clipping and navigation.
 class InboxDocumentZoom extends StatefulWidget {
@@ -8,11 +12,13 @@ class InboxDocumentZoom extends StatefulWidget {
     required this.image,
     required this.child,
     this.enabled = true,
+    this.fit = BoxFit.fitWidth,
   });
 
   final ImageProvider image;
   final Widget child;
   final bool enabled;
+  final BoxFit fit;
 
   @override
   State<InboxDocumentZoom> createState() => _InboxDocumentZoomState();
@@ -37,11 +43,12 @@ class _InboxDocumentZoomState extends State<InboxDocumentZoom>
   Rect _page = Rect.zero;
   Rect _gesturePage = Rect.zero;
   Rect _source = Rect.zero;
+  Rect _sourcePage = Rect.zero;
   Rect _screen = Rect.zero;
-  Rect _viewport = Rect.zero;
   Offset _focalPoint = Offset.zero;
   Offset _overlayOrigin = Offset.zero;
   double _fitWidth = 1;
+  double _reveal = 0;
   bool _visible = false;
   bool _returning = false;
 
@@ -81,7 +88,7 @@ class _InboxDocumentZoomState extends State<InboxDocumentZoom>
           (source.localToGlobal(Offset.zero) - _overlayOrigin) & source.size;
       _screen = Offset.zero & overlay.size;
       final padding = MediaQuery.viewPaddingOf(context);
-      _viewport = Rect.fromLTRB(
+      final viewport = Rect.fromLTRB(
         16,
         padding.top + 16,
         _screen.right - 16,
@@ -90,10 +97,19 @@ class _InboxDocumentZoomState extends State<InboxDocumentZoom>
       final size = applyBoxFit(
         BoxFit.contain,
         _imageSize!,
-        _viewport.size,
+        viewport.size,
       ).destination;
-      _page = Alignment.center.inscribe(size, _viewport);
-      _fitWidth = size.width;
+      // Match the inline image's actual scale and alignment, including a
+      // thumbnail cropped with BoxFit.cover. Never reposition it on entry.
+      final fitted = applyBoxFit(widget.fit, _imageSize!, _source.size);
+      final imageScale = fitted.destination.width / fitted.source.width;
+      _sourcePage = Alignment.topCenter.inscribe(
+        _imageSize! * imageScale,
+        _source,
+      );
+      _page = _sourcePage;
+      _fitWidth = math.min(size.width, _sourcePage.width);
+      _reveal = 0;
       setState(() => _visible = true);
       _overlay.show();
     }
@@ -105,21 +121,26 @@ class _InboxDocumentZoomState extends State<InboxDocumentZoom>
     if (!_visible || _returning) return;
     final width = (_gesturePage.width * details.scale).clamp(
       _fitWidth,
-      _fitWidth * 6,
+      _sourcePage.width * 6,
     );
     final scale = width / _gesturePage.width;
     final focalPoint = details.focalPoint - _overlayOrigin;
     final topLeft = focalPoint - (_focalPoint - _gesturePage.topLeft) * scale;
     final height = _gesturePage.height * scale;
-    // Keep every edge reachable without losing the page outside the screen.
-    final x = width <= _viewport.width
-        ? _viewport.center.dx - width / 2
-        : topLeft.dx.clamp(_viewport.right - width, _viewport.left);
-    final y = height <= _viewport.height
-        ? _viewport.center.dy - height / 2
-        : topLeft.dy.clamp(_viewport.bottom - height, _viewport.top);
     setState(() {
-      _page = Rect.fromLTWH(x, y, width, height);
+      // The focal point stays attached to the same point on the document.
+      // Recentring or edge clamping here would move it away from the fingers.
+      _page = topLeft & Size(width, height);
+      // Unclip and dim as the fingers move, without a timed entry animation.
+      _reveal = math.max(
+        _reveal,
+        math
+            .max(
+              (details.scale - 1).abs() * 4,
+              (focalPoint - _focalPoint).distance / 80,
+            )
+            .clamp(0, 1),
+      );
     });
   }
 
@@ -154,9 +175,7 @@ class _InboxDocumentZoomState extends State<InboxDocumentZoom>
       controller: _overlay,
       overlayChildBuilder: (context) {
         final progress = Curves.easeOutBack.transform(_return.value);
-        final target =
-            _source.topLeft &
-            Size(_source.width, _source.width / _imageSize!.aspectRatio);
+        final target = _sourcePage;
         final interpolated = Rect.lerp(_page, target, progress)!;
         // Limit spring overshoot even when returning from maximum zoom.
         final width = interpolated.width.clamp(
@@ -168,7 +187,8 @@ class _InboxDocumentZoomState extends State<InboxDocumentZoom>
           width: width,
           height: width / _imageSize!.aspectRatio,
         );
-        final clip = Rect.lerp(_screen, _source, progress.clamp(0, 1))!;
+        final reveal = _reveal * (1 - progress.clamp(0, 1));
+        final clip = Rect.lerp(_source, _screen, reveal)!;
         return Positioned.fill(
           child: Semantics(
             label: 'Dokument vergrößert. Tippen zum Zurücksetzen.',
@@ -184,27 +204,31 @@ class _InboxDocumentZoomState extends State<InboxDocumentZoom>
                   Positioned.fill(
                     child: ColoredBox(
                       key: const ValueKey('document-zoom-dim'),
-                      color: Colors.black.withValues(
-                        alpha: 0.65 * (1 - progress.clamp(0, 1)),
-                      ),
+                      color: Colors.black.withValues(alpha: 0.65 * reveal),
                     ),
                   ),
                   Positioned.fromRect(
                     rect: clip,
-                    child: ClipRect(
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          Positioned.fromRect(
-                            rect: page.shift(-clip.topLeft),
-                            child: Image(
-                              key: const ValueKey('document-zoom-image'),
-                              image: widget.image,
-                              fit: BoxFit.fill,
-                              gaplessPlayback: true,
+                    child: Opacity(
+                      opacity: _reveal == 0 ? 0 : 1,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(Radii.xl * (1 - reveal)),
+                        ),
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Positioned.fromRect(
+                              rect: page.shift(-clip.topLeft),
+                              child: Image(
+                                key: const ValueKey('document-zoom-image'),
+                                image: widget.image,
+                                fit: BoxFit.fill,
+                                gaplessPlayback: true,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -225,7 +249,10 @@ class _InboxDocumentZoomState extends State<InboxDocumentZoom>
                     ..onUpdate = _update,
                 ),
         },
-        child: Opacity(opacity: _visible ? 0 : 1, child: widget.child),
+        child: Opacity(
+          opacity: _visible && _reveal > 0 ? 0 : 1,
+          child: widget.child,
+        ),
       ),
     ),
   );

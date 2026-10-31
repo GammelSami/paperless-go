@@ -895,6 +895,7 @@ class _PagedPreviewState extends ConsumerState<_PagedPreview> {
             child: InboxDocumentZoom(
               image: imageProvider,
               enabled: widget.interactive,
+              fit: bytes != null ? BoxFit.fitWidth : BoxFit.cover,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
