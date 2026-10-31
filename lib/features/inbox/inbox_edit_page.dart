@@ -185,18 +185,19 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
           Row(
             children: [
               Expanded(
+                flex: 15,
                 child: _keepVisible(
                   _dateField(
                     context,
                     _date,
                     'Datum',
-                    icon: Icons.description_outlined,
                     onPicked: (d) => setState(() => _date.text = formatDate(d)),
                   ),
                 ),
               ),
-              const SizedBox(width: Spacing.md),
+              const SizedBox(width: Spacing.sm),
               Expanded(
+                flex: 17,
                 child: _keepVisible(
                   MetadataDropdown<Tag>(
                     key: ValueKey(_tags.length),
@@ -367,20 +368,23 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
     BuildContext context,
     TextEditingController controller,
     String label, {
-    required IconData icon,
+    IconData? icon,
     required ValueChanged<DateTime> onPicked,
   }) {
     return TextField(
       controller: controller,
       keyboardType: TextInputType.datetime,
       // Tabular digits, like the dates on the card.
-      style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()]),
+      style: TextStyle(
+        fontSize: icon == null ? 14 : null,
+        fontFeatures: const [FontFeature.tabularFigures()],
+      ),
       decoration: _dense(
         InputDecoration(
           labelText: label,
           hintText: 'TT.MM.JJJJ',
-          // Same icons as on the card: document = document date, ! = deadline.
-          prefixIcon: Icon(icon, size: 18),
+          // The deadline keeps its ! icon; the compact document date needs the space.
+          prefixIcon: icon == null ? null : Icon(icon, size: 18),
           suffixIcon: IconButton(
             visualDensity: VisualDensity.compact,
             icon: const Icon(Icons.calendar_month_outlined),
