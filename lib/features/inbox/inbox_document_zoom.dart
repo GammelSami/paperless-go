@@ -49,6 +49,7 @@ class _InboxDocumentZoomState extends State<InboxDocumentZoom>
   Offset _overlayOrigin = Offset.zero;
   double _fitWidth = 1;
   double _reveal = 0;
+  double _cornerReveal = 0;
   bool _visible = false;
   bool _returning = false;
 
@@ -110,6 +111,7 @@ class _InboxDocumentZoomState extends State<InboxDocumentZoom>
       _page = _sourcePage;
       _fitWidth = math.min(size.width, _sourcePage.width);
       _reveal = 0;
+      _cornerReveal = 0;
       setState(() => _visible = true);
       _overlay.show();
     }
@@ -134,6 +136,20 @@ class _InboxDocumentZoomState extends State<InboxDocumentZoom>
     final height = _gesturePage.height * scale;
     setState(() {
       // The focal point stays attached to the same point on the document.
+      _cornerReveal = shrinking
+          ? math.min(
+              _cornerReveal,
+              ((width - _fitWidth) / _sourcePage.width).clamp(0, 1),
+            )
+          : math.max(
+              _cornerReveal,
+              math
+                  .max(
+                    (details.scale - 1).abs(),
+                    (focalPoint - _focalPoint).distance / 320,
+                  )
+                  .clamp(0, 1),
+            );
       // Recentring or edge clamping here would move it away from the fingers.
       _page = topLeft & Size(width, height);
       // Unclip and dim as the fingers move, without a timed entry animation.
@@ -223,7 +239,11 @@ class _InboxDocumentZoomState extends State<InboxDocumentZoom>
                       opacity: _reveal == 0 ? 0 : 1,
                       child: ClipRRect(
                         borderRadius: BorderRadius.vertical(
-                          top: Radius.circular(Radii.xl * (1 - reveal)),
+                          top: Radius.circular(
+                            Radii.xl *
+                                (1 -
+                                    _cornerReveal * (1 - progress.clamp(0, 1))),
+                          ),
                         ),
                         child: Stack(
                           clipBehavior: Clip.none,
