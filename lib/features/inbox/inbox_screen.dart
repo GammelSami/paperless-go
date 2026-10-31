@@ -12,6 +12,7 @@ import '../../core/api/download_file_type.dart';
 import '../../core/design_tokens.dart';
 import '../../core/models/custom_field.dart';
 import '../../core/models/document.dart';
+import '../../core/models/tag.dart';
 import '../../shared/error_banner.dart';
 import '../../shared/format.dart';
 import '../../shared/widgets/stamp_chip.dart';
@@ -324,7 +325,12 @@ class _InboxCard extends ConsumerWidget {
           const SizedBox(width: Spacing.xs),
           Text(
             d != null ? formatDate(d) : '—',
-            style: text.bodyMedium?.copyWith(color: tokens.inkSoft),
+            // Tabular digits: every number is equally wide, so stacked
+            // dates line up exactly.
+            style: text.bodyMedium?.copyWith(
+              color: tokens.inkSoft,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
           ),
         ],
       ),
@@ -457,24 +463,35 @@ class _CardInfo extends ConsumerWidget {
         ),
         if (fields.isNotEmpty || visibleTags.isNotEmpty) ...[
           const SizedBox(height: Spacing.xs),
-          Wrap(
-            spacing: Spacing.xs,
-            runSpacing: Spacing.xs,
-            children: [
-              for (final label in fields) _FieldChip(label: label),
-              for (final t in visibleTags) TagChip(tag: t, dense: true),
-            ],
-          ),
+          if (fields.isNotEmpty)
+            Wrap(
+              spacing: Spacing.xs,
+              runSpacing: Spacing.xs,
+              children: [for (final label in fields) _FieldChip(label: label)],
+            ),
+          if (fields.isNotEmpty && visibleTags.isNotEmpty)
+            const SizedBox(height: Spacing.xs),
+          if (visibleTags.isNotEmpty) _PackedTags(tags: visibleTags),
         ],
       ],
     );
     if (docType == null) return details;
 
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          RotatedBox(
+    // Sideways label in a Stack (not IntrinsicHeight, which can't measure the
+    // LayoutBuilder in the tag block): it spans exactly the details' height.
+    const labelWidth = 16.0;
+    return Stack(
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: labelWidth + Spacing.xs),
+          child: details,
+        ),
+        Positioned(
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: labelWidth,
+          child: RotatedBox(
             quarterTurns: 3,
             child: Text(
               docType,
@@ -484,10 +501,8 @@ class _CardInfo extends ConsumerWidget {
               style: text.labelSmall?.copyWith(color: tokens.inkSoft),
             ),
           ),
-          const SizedBox(width: Spacing.sm),
-          Expanded(child: details),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -503,6 +518,130 @@ class _CardInfo extends ConsumerWidget {
             extraData: def.extraData,
           );
     return '${def.name}: $shown';
+  }
+}
+
+/// Tags packed to fill the width: longest first into the first line they fit
+/// (first-fit decreasing), then each line's leftover space is shared out as
+/// extra padding, so lines end flush right instead of leaving a ragged gap.
+/// A last line that is less than 3/4 full keeps its natural padding.
+class _PackedTags extends StatelessWidget {
+  const _PackedTags({required this.tags});
+
+  final List<Tag> tags;
+
+  static const _gap = 4.0;
+  static const _basePad = 6.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = InboxTagChip.textStyle(context);
+    final scaler = MediaQuery.textScalerOf(context);
+    return LayoutBuilder(
+      builder: (context, box) {
+        double natural(Tag t) =>
+            (TextPainter(
+              text: TextSpan(text: t.name, style: style),
+              textDirection: TextDirection.ltr,
+              textScaler: scaler,
+              maxLines: 1,
+            )..layout()).width +
+            2 * _basePad +
+            2 * InboxTagChip.borderWidth;
+
+        final sorted = [...tags]
+          ..sort((a, b) => natural(b).compareTo(natural(a)));
+        final lines = <List<(Tag, double)>>[];
+        final used = <double>[];
+        for (final t in sorted) {
+          final w = natural(t).clamp(0.0, box.maxWidth);
+          final i = [
+            for (var j = 0; j < lines.length; j++)
+              if (used[j] + _gap + w <= box.maxWidth) j,
+          ].firstOrNull;
+          if (i == null) {
+            lines.add([(t, w)]);
+            used.add(w);
+          } else {
+            lines[i].add((t, w));
+            used[i] += _gap + w;
+          }
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (var j = 0; j < lines.length; j++)
+              Padding(
+                padding: EdgeInsets.only(top: j == 0 ? 0 : _gap),
+                child: Row(
+                  children: [
+                    for (final (i, (t, _)) in lines[j].indexed) ...[
+                      if (i > 0) const SizedBox(width: _gap),
+                      InboxTagChip(
+                        tag: t,
+                        hPad:
+                            _basePad +
+                            (j == lines.length - 1 &&
+                                    used[j] < box.maxWidth * 0.75
+                                ? 0
+                                : (box.maxWidth - used[j]) /
+                                      lines[j].length /
+                                      2),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// Fork: inbox tag look — outline in a softened tag colour, a faint tint
+/// inside, and text that is mostly ink with a touch of the tag colour.
+class InboxTagChip extends StatelessWidget {
+  const InboxTagChip({super.key, required this.tag, required this.hPad});
+
+  final Tag tag;
+  final double hPad;
+
+  static const borderWidth = 1.2;
+
+  static TextStyle? textStyle(BuildContext context) => Theme.of(context)
+      .textTheme
+      .labelSmall
+      ?.copyWith(fontSize: 10.5, fontWeight: FontWeight.w500, height: 1.3);
+
+  @override
+  Widget build(BuildContext context) {
+    final ink = Theme.of(context).colorScheme.onSurface;
+    final c =
+        TagChip.parseColor(tag.colour) ??
+        Theme.of(context).colorScheme.secondary;
+    return Semantics(
+      label: '${tag.name} tag',
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: hPad, vertical: 1),
+        decoration: BoxDecoration(
+          color: c.withValues(alpha: 0.08),
+          border: Border.all(
+            color: c.withValues(alpha: 0.55),
+            width: borderWidth,
+          ),
+          borderRadius: BorderRadius.circular(Radii.pill),
+        ),
+        child: Text(
+          tag.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: textStyle(context)?.copyWith(color: Color.lerp(ink, c, 0.3)),
+        ),
+      ),
+    );
   }
 }
 

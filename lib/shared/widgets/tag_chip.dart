@@ -5,15 +5,11 @@ import '../../core/models/tag.dart';
 
 class TagChip extends StatelessWidget {
   final Tag tag;
-
-  /// Fork: smaller text and padding (inbox card, where the page needs space).
-  final bool dense;
-  const TagChip({super.key, required this.tag, this.dense = false});
+  const TagChip({super.key, required this.tag});
 
   @override
   Widget build(BuildContext context) {
-    final bgColor =
-        parseColor(tag.colour) ??
+    final bgColor = parseColor(tag.colour) ??
         Theme.of(context).colorScheme.secondaryContainer;
     final fgColor = bgColor.computeLuminance() > 0.5
         ? Colors.black87
@@ -22,25 +18,17 @@ class TagChip extends StatelessWidget {
     return Semantics(
       label: '${tag.name} tag',
       child: Container(
-        padding: dense
-            ? const EdgeInsets.symmetric(horizontal: 6, vertical: 1)
-            : const EdgeInsets.symmetric(horizontal: Spacing.sm, vertical: 3),
+        padding: const EdgeInsets.symmetric(horizontal: Spacing.sm, vertical: 3),
         decoration: BoxDecoration(
-          // Fork: dense chips are outlined in the tag colour, no fill.
-          color: dense ? null : bgColor,
-          border: dense ? Border.all(color: bgColor, width: 1.5) : null,
+          color: bgColor,
           borderRadius: BorderRadius.circular(Radii.pill),
         ),
         child: Text(
           tag.name,
-          style:
-              (dense
-                      ? Theme.of(context).textTheme.labelSmall
-                      : Theme.of(context).textTheme.bodySmall)
-                  ?.copyWith(
-                color: dense ? null : fgColor,
-                fontWeight: FontWeight.w500,
-              ),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: fgColor,
+            fontWeight: FontWeight.w500,
+          ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
@@ -86,10 +74,7 @@ class TagOverflowChip extends StatelessWidget {
     return Semantics(
       label: '$count more tags',
       child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: Spacing.sm,
-          vertical: 3,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: Spacing.sm, vertical: 3),
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(Radii.pill),
