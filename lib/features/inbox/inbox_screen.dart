@@ -541,7 +541,9 @@ class _CardInfo extends ConsumerWidget {
           child: details,
         ),
         Positioned(
-          left: 0,
+          // Measured on screen: centred between card edge and text (the
+          // title's side bearing and the card border shift it by ~1.5).
+          left: 1.5,
           top: top,
           bottom: bottom,
           width: labelWidth,

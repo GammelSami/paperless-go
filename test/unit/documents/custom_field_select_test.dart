@@ -78,6 +78,7 @@ void main() {
     test('monetary shows German format with sign', () {
       expect(displayCustomFieldValue('9.99', 'monetary'), '+9,99 €');
       expect(displayCustomFieldValue('EUR-91.80', 'monetary'), '-91,80 €');
+      expect(displayCustomFieldValue('EUR-1249.90', 'monetary'), '-1.249,90 €');
     });
 
     test('null returns Not set', () {
