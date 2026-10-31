@@ -20,6 +20,7 @@ import '../../shared/widgets/tag_chip.dart';
 import '../documents/document_detail_screen.dart' show displayCustomFieldValue;
 import '../scanner/processing/metadata_matcher.dart';
 import 'inbox_edit_page.dart';
+import 'inbox_document_zoom.dart';
 import 'inbox_notifier.dart';
 import '../upload_queue/queue_status_banner.dart';
 
@@ -819,6 +820,7 @@ class _PagedPreviewState extends ConsumerState<_PagedPreview> {
       final pdf = await PdfDocument.openFile(file.path);
       if (_disposed) return pdf.close();
       setState(() => _pdf = pdf);
+      await _show(1);
     } on Exception {
       // Thumbnail stays; paging just isn't available for this document.
     }
@@ -852,6 +854,12 @@ class _PagedPreviewState extends ConsumerState<_PagedPreview> {
     final api = ref.watch(paperlessApiProvider);
     final count = _pdf?.pagesCount ?? 1;
     final bytes = _pages[_page];
+    final ImageProvider imageProvider = bytes != null
+        ? MemoryImage(bytes)
+        : CachedNetworkImageProvider(
+            api.thumbnailUrl(widget.document.id),
+            headers: {'Authorization': api.authToken},
+          );
 
     final image = bytes != null
         ? Image.memory(
@@ -884,34 +892,40 @@ class _PagedPreviewState extends ConsumerState<_PagedPreview> {
       child: Column(
         children: [
           Expanded(
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                ColoredBox(color: tokens.paper, child: image),
-                if (count > 1)
-                  Positioned(
-                    top: Spacing.sm,
-                    left: Spacing.sm,
-                    right: Spacing.sm,
-                    child: Row(
-                      children: [
-                        for (var i = 1; i <= count; i++)
-                          Expanded(
-                            child: Container(
-                              height: 4,
-                              margin: const EdgeInsets.symmetric(horizontal: 2),
-                              decoration: BoxDecoration(
-                                color: i == _page
-                                    ? Colors.black54
-                                    : Colors.black.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(2),
+            child: InboxDocumentZoom(
+              image: imageProvider,
+              enabled: widget.interactive,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ColoredBox(color: tokens.paper, child: image),
+                  if (count > 1)
+                    Positioned(
+                      top: Spacing.sm,
+                      left: Spacing.sm,
+                      right: Spacing.sm,
+                      child: Row(
+                        children: [
+                          for (var i = 1; i <= count; i++)
+                            Expanded(
+                              child: Container(
+                                height: 4,
+                                margin: const EdgeInsets.symmetric(
+                                  horizontal: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: i == _page
+                                      ? Colors.black54
+                                      : Colors.black.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
                               ),
                             ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
           ConstrainedBox(

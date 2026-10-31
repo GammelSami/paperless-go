@@ -1,0 +1,140 @@
+import 'dart:ui' as ui;
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:paperless_go/features/inbox/inbox_document_zoom.dart';
+
+void main() {
+  testWidgets('pinch persists, pans, resets, then resumes paging and swiping', (
+    tester,
+  ) async {
+    final provider = (await tester.runAsync(() async {
+      final recorder = ui.PictureRecorder();
+      Canvas(recorder).drawRect(
+        const Rect.fromLTWH(0, 0, 200, 400),
+        Paint()..color = Colors.white,
+      );
+      final picture = recorder.endRecording();
+      final image = await picture.toImage(200, 400);
+      final bytes = (await image.toByteData(format: ui.ImageByteFormat.png))!;
+      final provider = MemoryImage(bytes.buffer.asUint8List());
+      image.dispose();
+      picture.dispose();
+      return provider;
+    }))!;
+    var pages = 0;
+    var swipes = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: GestureDetector(
+              onPanUpdate: (_) => swipes++,
+              child: SizedBox(
+                width: 250,
+                height: 180,
+                child: GestureDetector(
+                  onTap: () => pages++,
+                  child: InboxDocumentZoom(
+                    image: provider,
+                    child: Image(image: provider, fit: BoxFit.cover),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.runAsync(
+      () => precacheImage(
+        provider,
+        tester.element(find.byType(InboxDocumentZoom)),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final preview = find.byType(InboxDocumentZoom);
+    final center = tester.getCenter(preview);
+    final zoom = find.byKey(const ValueKey('document-zoom-image'));
+    final dim = find.byKey(const ValueKey('document-zoom-dim'));
+
+    await tester.tap(preview);
+    await tester.pumpAndSettle();
+    expect(pages, 1);
+    await tester.timedDrag(
+      preview,
+      const Offset(60, 0),
+      const Duration(milliseconds: 300),
+    );
+    await tester.pumpAndSettle();
+    expect(swipes, greaterThan(0));
+    expect(zoom, findsNothing);
+    final previousSwipes = swipes;
+
+    final first = await tester.startGesture(
+      center - const Offset(30, 0),
+      pointer: 1,
+    );
+    final second = await tester.startGesture(
+      center + const Offset(30, 0),
+      pointer: 2,
+    );
+    await tester.pump();
+    expect(zoom, findsOneWidget);
+    await first.moveBy(const Offset(-25, 0));
+    await second.moveBy(const Offset(25, 0));
+    await tester.pump();
+    await first.moveBy(const Offset(-20, 0));
+    await second.moveBy(const Offset(20, 0));
+    await tester.pump();
+    final enlarged = tester.getRect(zoom);
+    expect(enlarged.width, greaterThan(250));
+    expect(enlarged.height / enlarged.width, closeTo(2, 0.001));
+    expect(dim, findsOneWidget);
+    await first.up();
+    await second.up();
+    await tester.pumpAndSettle();
+    expect(tester.getRect(zoom), enlarged);
+    expect(pages, 1);
+    expect(swipes, previousSwipes);
+
+    await tester.dragFrom(const Offset(400, 300), const Offset(40, 50));
+    await tester.pumpAndSettle();
+    expect(tester.getRect(zoom).topLeft, isNot(enlarged.topLeft));
+    expect(tester.getRect(zoom).size, enlarged.size);
+    expect(swipes, previousSwipes);
+
+    final inwardFirst = await tester.startGesture(
+      const Offset(320, 300),
+      pointer: 3,
+    );
+    final inwardSecond = await tester.startGesture(
+      const Offset(480, 300),
+      pointer: 4,
+    );
+    await inwardFirst.moveTo(const Offset(390, 300));
+    await inwardSecond.moveTo(const Offset(410, 300));
+    await inwardFirst.up();
+    await inwardSecond.up();
+    await tester.pumpAndSettle();
+    final fitted = tester.getRect(zoom);
+    expect(fitted.width, lessThan(enlarged.width));
+    expect(fitted.left, greaterThanOrEqualTo(0));
+    expect(fitted.top, greaterThanOrEqualTo(0));
+    expect(fitted.right, lessThanOrEqualTo(800));
+    expect(fitted.bottom, lessThanOrEqualTo(600));
+
+    await tester.tapAt(const Offset(400, 300));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(zoom, findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(zoom, findsNothing);
+    expect(dim, findsNothing);
+    expect(pages, 1);
+    await tester.tap(preview);
+    await tester.pumpAndSettle();
+    expect(pages, 2);
+    expect(tester.takeException(), isNull);
+  });
+}
