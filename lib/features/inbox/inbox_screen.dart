@@ -509,14 +509,31 @@ class _CardInfo extends ConsumerWidget {
           top: 0,
           bottom: 0,
           width: labelWidth,
+          // Rule – type – rule, turned upright: marks the info block from the
+          // title to the last tag, with the type centred in the line.
           child: RotatedBox(
             quarterTurns: 3,
-            child: Text(
-              docType,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: _CardStyle.chip(context)?.copyWith(color: tokens.inkSoft),
+            child: Row(
+              children: [
+                Expanded(child: Container(height: 1, color: tokens.line)),
+                Flexible(
+                  flex: 0,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: _CardStyle.gap,
+                    ),
+                    child: Text(
+                      docType,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _CardStyle.chip(
+                        context,
+                      )?.copyWith(color: tokens.inkSoft),
+                    ),
+                  ),
+                ),
+                Expanded(child: Container(height: 1, color: tokens.line)),
+              ],
             ),
           ),
         ),
