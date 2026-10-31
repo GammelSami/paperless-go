@@ -58,7 +58,7 @@ GoRouter router(Ref ref) {
   return GoRouter(
     navigatorKey: rootNavigatorKey,
     // '/' is not a screen; the redirect resolves it to the start screen
-    // the user chose (Library by default) once that setting has loaded.
+    // the user chose (Inbox by default) once that setting has loaded.
     initialLocation: '/',
     refreshListenable: refreshNotifier,
     errorBuilder: (context, state) => Scaffold(

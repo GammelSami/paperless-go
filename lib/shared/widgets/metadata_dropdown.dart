@@ -13,6 +13,7 @@ class MetadataDropdown<T> extends StatefulWidget {
   final T? value;
   final List<T> items;
   final String Function(T) displayName;
+  final Widget Function(T)? leadingIcon;
 
   /// Selection handler. When null the dropdown is disabled (e.g. mid-upload).
   final ValueChanged<T?>? onChanged;
@@ -36,6 +37,7 @@ class MetadataDropdown<T> extends StatefulWidget {
     required this.value,
     required this.items,
     required this.displayName,
+    this.leadingIcon,
     required this.onChanged,
     this.suffix,
     this.emptyLabel = 'Keine Angabe',
@@ -118,7 +120,11 @@ class _MetadataDropdownState<T> extends State<MetadataDropdown<T>> {
           leadingIcon: const Icon(Icons.add, size: 18),
         ),
       for (final item in sorted)
-        DropdownMenuEntry<T?>(value: item, label: displayName(item)),
+        DropdownMenuEntry<T?>(
+          value: item,
+          label: displayName(item),
+          leadingIcon: w.leadingIcon?.call(item),
+        ),
     ];
     final selectedLabel = effectiveValue == null
         ? emptyLabel

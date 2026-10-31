@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -50,10 +48,6 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
   final _tagMenu = MenuController();
 
   final Map<int, Offset> _pointerStarts = {};
-  bool _lifted = false;
-  bool _dropdownLift = false;
-  bool _keyboardWasOpen = false;
-  Timer? _liftTimer;
   late final Future<List<DateTime>> _suggestedDates;
   bool _saving = false;
 
@@ -86,7 +80,6 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
     for (final c in _fieldText.values) {
       c.dispose();
     }
-    _liftTimer?.cancel();
     super.dispose();
   }
 
@@ -117,16 +110,23 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
         .where((d) => d.name == 'Frist' && d.dataType == 'date')
         .firstOrNull;
     const gap = SizedBox(height: Spacing.md);
-    final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
-    if (keyboardOpen) _dropdownLift = false;
-    if (_keyboardWasOpen && !keyboardOpen) {
-      _liftTimer?.cancel();
-      _lifted = false;
-    }
-    _keyboardWasOpen = keyboardOpen;
-
     return Scaffold(
       appBar: AppBar(title: const Text('Bearbeiten')),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            Spacing.lg,
+            Spacing.sm,
+            Spacing.lg,
+            Spacing.lg,
+          ),
+          child: FilledButton(
+            onPressed: _saving ? null : _save,
+            child: const Text('OK'),
+          ),
+        ),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(Spacing.lg),
         children: [
@@ -228,13 +228,14 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
                   MetadataDropdown<Tag>(
                     menuController: _tagMenu,
                     key: ValueKey(_tags.length),
-                    label: 'Tag hinzufügen',
+                    label: '+ Tag',
                     value: null,
                     emptyLabel: '',
                     items: tags.values
                         .where((t) => !t.isInboxTag && !_tags.contains(t.id))
                         .toList(),
                     displayName: (t) => t.name,
+                    leadingIcon: (t) => TagDot(tag: t, size: 20),
                     onChanged: (t) {
                       if (t != null) setState(() => _tags.add(t.id));
                     },
@@ -269,80 +270,45 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
             gap,
             _customField(context, done),
           ],
-          const SizedBox(height: Spacing.lg),
-          FilledButton(
-            onPressed: _saving ? null : _save,
-            child: const Text('OK'),
-          ),
-          // Dropdowns need room before opening; animate for the keyboard.
-          AnimatedContainer(
-            duration: _dropdownLift && !keyboardOpen
-                ? Duration.zero
-                : const Duration(milliseconds: 240),
-            curve: Curves.easeOutCubic,
-            height: _lifted || keyboardOpen
-                ? MediaQuery.sizeOf(context).height * 0.8
-                : 0,
-          ),
         ],
       ),
     );
   }
 
-  /// A pointer-up from a tap arrives before the dropdown's tap callback.
-  /// Ignore drags so scrolling the page never jumps to a field.
+  /// Dropdowns may close when scrolling starts. Reopen after a real tap has
+  /// brought the field into view; regular text fields use Flutter's focus
+  /// scrolling without changing the scroll extent.
   Widget _keepVisible(
     Widget child, {
     bool ignoreLeadingTap = false,
     MenuController? menuController,
   }) => Builder(
     builder: (fieldContext) {
+      if (menuController == null) return child;
       return Listener(
         onPointerDown: (event) {
           _pointerStarts[event.pointer] = event.localPosition;
-          if (ignoreLeadingTap && event.localPosition.dx < 40) return;
-          setState(() {
-            _lifted = true;
-            _dropdownLift = menuController != null;
-          });
-          _liftTimer?.cancel();
-          _liftTimer = Timer(const Duration(seconds: 1), () {
-            if (mounted && _lifted) setState(() => _lifted = false);
-          });
         },
         onPointerCancel: (event) {
           _pointerStarts.remove(event.pointer);
-          _liftTimer?.cancel();
-          if (MediaQuery.viewInsetsOf(context).bottom == 0) {
-            setState(() => _lifted = false);
-          }
         },
         onPointerUp: (event) {
           final start = _pointerStarts.remove(event.pointer);
-          if (start == null || (event.localPosition - start).distance > 8) {
-            _liftTimer?.cancel();
-            if (MediaQuery.viewInsetsOf(context).bottom == 0) {
-              setState(() => _lifted = false);
-            }
-            return;
-          }
+          if (start == null || (event.localPosition - start).distance > 8) return;
           if (ignoreLeadingTap && start.dx < 40) return;
-          if (menuController == null) {
-            Scrollable.ensureVisible(
-              fieldContext,
-              alignment: 0.02,
-              duration: const Duration(milliseconds: 240),
-              curve: Curves.easeOutCubic,
-            );
-            return;
-          }
           if (menuController.isOpen) return;
-          // The spacer is laid out next frame. Scrolling may close the menu
-          // opened by this tap, so open it again after the jump.
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!fieldContext.mounted) return;
-            Scrollable.ensureVisible(fieldContext, alignment: 0.02);
-            menuController.open();
+            menuController.close();
+            Scrollable.ensureVisible(
+              fieldContext,
+              alignment: 0.05,
+              alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtStart,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOutCubic,
+            ).then((_) {
+              if (fieldContext.mounted) menuController.open();
+            });
           });
         },
         child: child,

@@ -6,10 +6,7 @@ import '../auth/auth_provider.dart';
 /// Where the app lands after login, on a `/` deep link, and when a shared
 /// file needs a real screen to sit on while it is routed.
 ///
-/// Inbox used to be hard-wired here. It is the highest-frequency workflow
-/// for someone who sorts every day, but for everyone else it is a triage
-/// queue you did not ask for, and sharing a file into the app also had to
-/// pass through it. Library is the neutral default.
+/// Inbox is the default landing screen; the setting can still select Library.
 enum StartScreen {
   library('/documents', 'Library'),
   inbox('/inbox', 'Inbox');
@@ -22,7 +19,7 @@ enum StartScreen {
   /// User-facing name, for the Settings row.
   final String label;
 
-  static const StartScreen fallback = StartScreen.library;
+  static const StartScreen fallback = StartScreen.inbox;
 
   /// Parses a stored [name]; anything unknown (including null) is the
   /// default, so a removed value can never strand the router.

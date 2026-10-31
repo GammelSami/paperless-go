@@ -20,12 +20,12 @@ class _BrokenStorage extends SecureStorageService {
 
 void main() {
   group('StartScreen.parse', () {
-    test('maps stored names to screens and anything else to Library', () {
+    test('maps stored names to screens and anything else to Inbox', () {
       expect(StartScreen.parse('inbox'), StartScreen.inbox);
       expect(StartScreen.parse('library'), StartScreen.library);
-      expect(StartScreen.parse(null), StartScreen.library);
-      expect(StartScreen.parse(''), StartScreen.library);
-      expect(StartScreen.parse('dashboard'), StartScreen.library);
+      expect(StartScreen.parse(null), StartScreen.inbox);
+      expect(StartScreen.parse(''), StartScreen.inbox);
+      expect(StartScreen.parse('dashboard'), StartScreen.inbox);
     });
 
     test('every screen has a shell route and a label', () {
@@ -57,16 +57,16 @@ void main() {
       );
     });
 
-    test('defaults to Library when nothing is stored', () async {
+    test('defaults to Inbox when nothing is stored', () async {
       container = build({});
       addTearDown(container.dispose);
       expect(
         await container.read(startScreenProvider.future),
-        StartScreen.library,
+        StartScreen.inbox,
       );
     });
 
-    test('a storage read failure degrades to Library instead of erroring',
+    test('a storage read failure degrades to Inbox instead of erroring',
         () async {
       // The router awaits this; an error here would leave the app on a
       // blank screen with no route to login.
@@ -76,15 +76,14 @@ void main() {
       addTearDown(container.dispose);
       expect(
         await container.read(startScreenProvider.future),
-        StartScreen.library,
+        StartScreen.inbox,
       );
       expect(container.read(startScreenProvider).hasError, isFalse);
     });
 
     test('a storage write failure reverts the choice and reports false',
         () async {
-      // Showing Inbox selected while storage still says Library would only
-      // revert on the next launch; better to tell the truth now.
+      // The failed write must restore the previously shown choice.
       container = ProviderContainer(
         overrides: [secureStorageProvider.overrideWithValue(_BrokenStorage())],
       );
@@ -92,11 +91,11 @@ void main() {
       await container.read(startScreenProvider.future);
       final saved = await container
           .read(startScreenProvider.notifier)
-          .set(StartScreen.inbox);
+          .set(StartScreen.library);
       expect(saved, isFalse);
       expect(
         container.read(startScreenProvider).valueOrNull,
-        StartScreen.library,
+        StartScreen.inbox,
       );
     });
 

@@ -67,13 +67,13 @@ class GoRouterHarness {
 }
 
 void main() {
-  testWidgets('the app lands on Library by default', (tester) async {
+  testWidgets('the app lands on Inbox by default', (tester) async {
     final harness = await _harness(tester, _FakeAuthenticated.new);
     addTearDown(harness.container.dispose);
 
     expect(
       harness.router.routerDelegate.currentConfiguration.uri.toString(),
-      '/documents',
+      '/inbox',
     );
   });
 
@@ -106,10 +106,10 @@ void main() {
 
     expect(
       router.routerDelegate.currentConfiguration.uri.toString(),
-      '/documents',
+      '/inbox',
     );
     expect(rootNavigatorKey.currentContext, isNotNull);
-    // Drain the Library screen's own timers before teardown.
+    // Drain the Inbox screen's own timers before teardown.
     await tester.pumpAndSettle();
   });
 
@@ -156,7 +156,7 @@ void main() {
     );
   });
 
-  testWidgets('an unknown stored start screen falls back to Library',
+  testWidgets('an unknown stored start screen falls back to Inbox',
       (tester) async {
     final harness = await _harness(
       tester,
@@ -167,7 +167,7 @@ void main() {
 
     expect(
       harness.router.routerDelegate.currentConfiguration.uri.toString(),
-      '/documents',
+      '/inbox',
     );
   });
 
@@ -209,7 +209,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       harness.router.routerDelegate.currentConfiguration.uri.toString(),
-      '/documents',
+      '/inbox',
     );
   });
 
@@ -230,7 +230,7 @@ void main() {
 
     expect(
       harness.router.routerDelegate.currentConfiguration.uri.toString(),
-      '/documents',
+      '/inbox',
     );
   });
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -35,7 +37,6 @@ class InboxScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final inboxState = ref.watch(inboxNotifierProvider);
-    final tokens = AppTokens.of(context);
 
     ref.listen(inboxNotifierProvider, (prev, next) {
       final error = next.valueOrNull?.loadMoreError;
@@ -56,33 +57,13 @@ class InboxScreen extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(
                 Spacing.xl,
-                Spacing.lg,
+                0,
                 Spacing.md,
-                Spacing.sm,
+                0,
               ),
               child: Row(
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Inbox',
-                          style: Theme.of(context).textTheme.headlineMedium,
-                        ),
-                        Text(
-                          switch (inboxState.valueOrNull?.totalCount) {
-                            null => ' ',
-                            0 => 'All caught up',
-                            1 => '1 to sort',
-                            final n => '$n to sort',
-                          },
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: tokens.inkSoft),
-                        ),
-                      ],
-                    ),
-                  ),
+                  const Spacer(),
                   IconButton(
                     icon: const Icon(Icons.search),
                     tooltip: 'Search',
@@ -174,9 +155,9 @@ class _CardStackState extends ConsumerState<_CardStack>
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         Spacing.xl,
-        Spacing.sm,
+        0,
         Spacing.xl,
-        Spacing.lg,
+        Spacing.sm,
       ),
       child: Stack(
         alignment: Alignment.center,
@@ -792,6 +773,7 @@ class _PagedPreview extends ConsumerStatefulWidget {
 class _PagedPreviewState extends ConsumerState<_PagedPreview> {
   PdfDocument? _pdf;
   final _pages = <int, Uint8List>{};
+  final _renders = <int, Future<Uint8List?>>{};
   int _page = 1;
   bool _disposed = false;
 
@@ -821,6 +803,9 @@ class _PagedPreviewState extends ConsumerState<_PagedPreview> {
       if (_disposed) return pdf.close();
       setState(() => _pdf = pdf);
       await _show(1);
+      for (var page = 2; page <= pdf.pagesCount && page <= 3; page++) {
+        unawaited(_renderPage(page));
+      }
     } on Exception {
       // Thumbnail stays; paging just isn't available for this document.
     }
@@ -829,16 +814,38 @@ class _PagedPreviewState extends ConsumerState<_PagedPreview> {
   Future<void> _show(int page) async {
     final pdf = _pdf;
     if (pdf == null || page < 1 || page > pdf.pagesCount) return;
+    final bytes = await _renderPage(page);
+    if (_disposed || bytes == null) return;
     setState(() => _page = page);
-    if (_pages.containsKey(page)) return;
-    final p = await pdf.getPage(page);
-    final img = await p.render(
-      width: p.width * 2,
-      height: p.height * 2,
-      format: PdfPageImageFormat.png,
-    );
-    await p.close();
-    if (!_disposed && img != null) setState(() => _pages[page] = img.bytes);
+    if (page < pdf.pagesCount) unawaited(_renderPage(page + 1));
+  }
+
+  Future<Uint8List?> _renderPage(int page) {
+    final cached = _pages[page];
+    if (cached != null) return Future.value(cached);
+    return _renders.putIfAbsent(page, () async {
+      try {
+        final p = await _pdf!.getPage(page);
+        try {
+          final img = await p.render(
+            width: p.width * 2,
+            height: p.height * 2,
+            format: PdfPageImageFormat.png,
+          );
+          if (_disposed || img == null) return null;
+          final bytes = img.bytes;
+          _pages[page] = bytes;
+          if (mounted) await precacheImage(MemoryImage(bytes), context);
+          return bytes;
+        } finally {
+          await p.close();
+        }
+      } on Exception {
+        return null;
+      } finally {
+        _renders.remove(page);
+      }
+    });
   }
 
   @override
