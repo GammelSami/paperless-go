@@ -366,8 +366,9 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
             case 'monetary':
               // German input: "1.249,90" → 1249.90 (dots are thousands).
               var t = text.trim().replaceAll(' ', '');
-              if (t.contains(','))
+              if (t.contains(',')) {
                 t = t.replaceAll('.', '').replaceAll(',', '.');
+              }
               if (t.isEmpty) {
                 value = null;
               } else {
