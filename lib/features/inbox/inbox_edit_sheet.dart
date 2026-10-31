@@ -142,8 +142,30 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
               displayName: (c) => c.name,
               onChanged: (c) => setState(() => _correspondentId = c?.id),
             ),
-            for (final def in fields)
-              if (def.dataType != 'date') ...[gap, _customField(context, def)],
+            // Amount and done side by side, a little faded: secondary info,
+            // like the small chips on the card.
+            if (fields.any((d) => d.dataType != 'date')) ...[
+              gap,
+              Opacity(
+                opacity: 0.8,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children:
+                      [
+                            for (final def in fields)
+                              if (def.dataType != 'date')
+                                def.dataType == 'boolean'
+                                    ? _customField(context, def)
+                                    : Expanded(
+                                        child: _customField(context, def),
+                                      ),
+                          ]
+                          .expand((w) => [w, const SizedBox(width: Spacing.md)])
+                          .toList()
+                        ..removeLast(),
+                ),
+              ),
+            ],
             gap,
             Text('Tags', style: Theme.of(context).textTheme.bodySmall),
             const SizedBox(height: Spacing.xs),
@@ -169,6 +191,7 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
               context,
               _date,
               'Dokumentdatum',
+              icon: Icons.description_outlined,
               onPicked: (d) => setState(() => _date.text = formatDate(d)),
             ),
             _suggestions(_date),
@@ -253,29 +276,45 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
     );
   }
 
+  /// Same height as the dropdowns (see MetadataDropdown).
+  static InputDecoration _dense(InputDecoration d) => d.copyWith(
+    isDense: true,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+    suffixIconConstraints: const BoxConstraints(minWidth: 40, minHeight: 36),
+  );
+
   Widget _dateField(
     BuildContext context,
     TextEditingController controller,
     String label, {
+    required IconData icon,
     required ValueChanged<DateTime> onPicked,
   }) {
     return TextField(
       controller: controller,
       keyboardType: TextInputType.datetime,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: 'TT.MM.JJJJ',
-        suffixIcon: IconButton(
-          icon: const Icon(Icons.calendar_month_outlined),
-          onPressed: () async {
-            final picked = await showDatePicker(
-              context: context,
-              initialDate: parseDateDe(controller.text) ?? DateTime.now(),
-              firstDate: DateTime(1900),
-              lastDate: DateTime(2100),
-            );
-            if (picked != null) onPicked(picked);
-          },
+      // Tabular digits, like the dates on the card.
+      style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()]),
+      decoration: _dense(
+        InputDecoration(
+          labelText: label,
+          hintText: 'TT.MM.JJJJ',
+          // Same icons as on the card: document = document date, ! = deadline.
+          prefixIcon: Icon(icon, size: 18),
+          suffixIcon: IconButton(
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.calendar_month_outlined),
+            onPressed: () async {
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: parseDateDe(controller.text) ?? DateTime.now(),
+                firstDate: DateTime(1900),
+                lastDate: DateTime(2100),
+              );
+              if (picked != null) onPicked(picked);
+            },
+          ),
         ),
       ),
     );
@@ -285,12 +324,22 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
     final value = _fieldValues[def.id];
     switch (def.dataType) {
       case 'boolean':
-        return CheckboxListTile(
-          contentPadding: EdgeInsets.zero,
-          controlAffinity: ListTileControlAffinity.leading,
-          title: Text(def.name),
-          value: value == true,
-          onChanged: (v) => setState(() => _fieldValues[def.id] = v ?? false),
+        return InkWell(
+          onTap: () => setState(() => _fieldValues[def.id] = value != true),
+          borderRadius: BorderRadius.circular(Radii.md),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Checkbox(
+                value: value == true,
+                visualDensity: VisualDensity.compact,
+                onChanged: (v) =>
+                    setState(() => _fieldValues[def.id] = v ?? false),
+              ),
+              Text(def.name),
+              const SizedBox(width: Spacing.sm),
+            ],
+          ),
         );
       case 'date':
         final controller = _textFor(def.id, _initialDate(def.id));
@@ -298,6 +347,7 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
           context,
           controller,
           def.name,
+          icon: Icons.priority_high,
           onPicked: (d) => setState(() => controller.text = formatDate(d)),
         );
       case 'monetary':
@@ -310,10 +360,8 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
             decimal: true,
             signed: true,
           ),
-          decoration: InputDecoration(
-            labelText: def.name,
-            suffixText: '€',
-            helperText: 'Minus = du zahlst, ohne Minus = du bekommst',
+          decoration: _dense(
+            InputDecoration(labelText: def.name, suffixText: '€'),
           ),
         );
       case 'string':
@@ -322,7 +370,7 @@ class _InboxEditSheetState extends ConsumerState<InboxEditSheet> {
       case 'float':
         return TextField(
           controller: _textFor(def.id, value?.toString() ?? ''),
-          decoration: InputDecoration(labelText: def.name),
+          decoration: _dense(InputDecoration(labelText: def.name)),
         );
       default:
         return ListTile(

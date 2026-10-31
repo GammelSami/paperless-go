@@ -4,8 +4,9 @@ import 'package:paperless_go/shared/widgets/metadata_dropdown.dart';
 
 void main() {
   group('MetadataDropdown', () {
-    testWidgets('renders None when the value is not in items (no crash)',
-        (tester) async {
+    testWidgets('renders None when the value is not in items (no crash)', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -63,10 +64,9 @@ void main() {
         ),
       );
 
-      final dropdown = tester.widget<DropdownButton<String>>(
-        find.byType(DropdownButton<String>),
-      );
-      expect(dropdown.onChanged, isNull);
+      // Fork: the field opens a search sheet on tap; disabled = no tap.
+      final tap = tester.widget<InkWell>(find.byType(InkWell).first);
+      expect(tap.onTap, isNull);
     });
   });
 }

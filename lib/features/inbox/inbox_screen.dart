@@ -593,6 +593,8 @@ class _CardInfo extends ConsumerWidget {
   }
 
   static String _fieldLabel(dynamic value, CustomField def) {
+    // The amount speaks for itself (sign and €), no "Betrag:" prefix.
+    if (def.dataType == 'monetary') return formatMoney(value.toString());
     if (def.dataType == 'boolean') {
       return value == true ? '${def.name} ✓' : '${def.name} ✗';
     }
