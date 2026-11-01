@@ -233,7 +233,7 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
                     menuController: _tagMenu,
                     beforeOpen: _prepareMenu,
                     key: ValueKey(_tags.length),
-                    label: '+ Tag',
+                    label: '+ Tags',
                     value: null,
                     emptyLabel: '',
                     items: tags.values
@@ -410,8 +410,14 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 for (final d in dates)
-                  ActionChip(
-                    label: Text(formatDate(d)),
+                  TextButton(
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppTokens.of(context).accentEmphasis,
+                      textStyle: const TextStyle(
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                    child: Text(formatDate(d)),
                     onPressed: () =>
                         setState(() => target.text = formatDate(d)),
                   ),
