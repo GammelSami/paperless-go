@@ -128,12 +128,7 @@ class _CardStackState extends ConsumerState<_CardStack>
     final progress = (_drag.dx / width).clamp(-1.0, 1.0);
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        Spacing.xl,
-        0,
-        Spacing.xl,
-        Spacing.sm,
-      ),
+      padding: const EdgeInsets.fromLTRB(Spacing.xl, 0, Spacing.xl, Spacing.sm),
       child: Stack(
         alignment: Alignment.center,
         children: [
@@ -853,7 +848,7 @@ class _PagedPreviewState extends ConsumerState<_PagedPreview> {
         : CachedNetworkImage(
             imageUrl: api.thumbnailUrl(widget.document.id),
             httpHeaders: {'Authorization': api.authToken},
-            fit: BoxFit.cover,
+            fit: BoxFit.fitWidth,
             alignment: Alignment.topCenter,
             errorWidget: (_, __, ___) => Icon(
               Icons.description_outlined,
@@ -872,12 +867,14 @@ class _PagedPreviewState extends ConsumerState<_PagedPreview> {
             )
           : null,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
+          Flexible(
             child: InboxDocumentZoom(
+              fitToImageHeight: true,
               image: imageProvider,
               enabled: widget.interactive,
-              fit: bytes != null ? BoxFit.fitWidth : BoxFit.cover,
+              fit: BoxFit.fitWidth,
               child: Stack(
                 fit: StackFit.expand,
                 children: [

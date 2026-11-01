@@ -4,24 +4,64 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:paperless_go/features/inbox/inbox_document_zoom.dart';
 
+Future<MemoryImage> _pageImage() async {
+  final recorder = ui.PictureRecorder();
+  Canvas(recorder).drawRect(
+    const Rect.fromLTWH(0, 0, 200, 400),
+    Paint()..color = Colors.white,
+  );
+  final picture = recorder.endRecording();
+  final image = await picture.toImage(200, 400);
+  final bytes = (await image.toByteData(format: ui.ImageByteFormat.png))!;
+  final provider = MemoryImage(bytes.buffer.asUint8List());
+  image.dispose();
+  picture.dispose();
+  return provider;
+}
+
 void main() {
+  testWidgets('short document ends directly above metadata', (tester) async {
+    final provider = (await tester.runAsync(_pageImage))!;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 250,
+            height: 580,
+            child: Column(
+              children: [
+                Flexible(
+                  child: InboxDocumentZoom(
+                    image: provider,
+                    fitToImageHeight: true,
+                    child: Image(image: provider, fit: BoxFit.fitWidth),
+                  ),
+                ),
+                const Text('Title and correspondent'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.runAsync(
+      () => precacheImage(
+        provider,
+        tester.element(find.byType(InboxDocumentZoom)),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final page = tester.getRect(find.byType(Image).first);
+    final info = tester.getRect(find.text('Title and correspondent'));
+    expect(page.height, 500);
+    expect(info.top, page.bottom);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('pinch persists, pans, resets, then resumes paging and swiping', (
     tester,
   ) async {
-    final provider = (await tester.runAsync(() async {
-      final recorder = ui.PictureRecorder();
-      Canvas(recorder).drawRect(
-        const Rect.fromLTWH(0, 0, 200, 400),
-        Paint()..color = Colors.white,
-      );
-      final picture = recorder.endRecording();
-      final image = await picture.toImage(200, 400);
-      final bytes = (await image.toByteData(format: ui.ImageByteFormat.png))!;
-      final provider = MemoryImage(bytes.buffer.asUint8List());
-      image.dispose();
-      picture.dispose();
-      return provider;
-    }))!;
+    final provider = (await tester.runAsync(_pageImage))!;
     var pages = 0;
     var swipes = 0;
     await tester.pumpWidget(
@@ -132,6 +172,10 @@ void main() {
     await second.up();
     await tester.pumpAndSettle();
     expect(tester.getRect(zoom), enlarged);
+    final clip = find
+        .ancestor(of: zoom, matching: find.byType(ClipRRect))
+        .first;
+    expect(tester.getRect(clip), const Rect.fromLTWH(0, 0, 800, 600));
     expect(pages, 1);
     expect(swipes, previousSwipes);
 
@@ -154,7 +198,11 @@ void main() {
     await inwardSecond.moveTo(const Offset(440, 300));
     await tester.pump();
     expect(zoom, findsOneWidget);
-    expect(tester.widget<ColoredBox>(dim).color.a, lessThan(0.65));
+    expect(
+      tester.widget<ColoredBox>(dim).color.a,
+      0.65,
+      reason: 'Further gestures must not shrink the full-screen zoom viewport.',
+    );
     await inwardSecond.moveTo(const Offset(410, 300));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));

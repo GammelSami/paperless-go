@@ -13,30 +13,45 @@ class InboxDocumentZoom extends StatefulWidget {
     required this.child,
     this.enabled = true,
     this.fit = BoxFit.fitWidth,
+    this.fitToImageHeight = false,
   });
 
   final ImageProvider image;
   final Widget child;
   final bool enabled;
   final BoxFit fit;
+  final bool fitToImageHeight;
 
   @override
   State<InboxDocumentZoom> createState() => _InboxDocumentZoomState();
 }
 
 class _InboxDocumentZoomState extends State<InboxDocumentZoom>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final _overlay = OverlayPortalController();
-  late final _return = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 320),
-  )..addListener(() => setState(() {}));
+  late final AnimationController _return;
+  late final AnimationController _unclip;
+
+  @override
+  void initState() {
+    super.initState();
+    _return = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+    )..addListener(() => setState(() {}));
+    _unclip = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 240),
+    )..addListener(() => setState(() => _reveal = _unclip.value));
+  }
+
   ImageStream? _stream;
   late final _imageListener = ImageStreamListener((info, _) {
-    _imageSize = Size(
+    final size = Size(
       info.image.width.toDouble(),
       info.image.height.toDouble(),
     );
+    if (_imageSize != size) setState(() => _imageSize = size);
     info.dispose();
   }, onError: (Object _, StackTrace? __) {});
   Size? _imageSize;
@@ -115,6 +130,7 @@ class _InboxDocumentZoomState extends State<InboxDocumentZoom>
       setState(() => _visible = true);
       _overlay.show();
     }
+    _unclip.stop();
     _gesturePage = _page;
     _focalPoint = details.focalPoint - _overlayOrigin;
   }
@@ -153,25 +169,25 @@ class _InboxDocumentZoomState extends State<InboxDocumentZoom>
       // Recentring or edge clamping here would move it away from the fingers.
       _page = topLeft & Size(width, height);
       // Unclip and dim as the fingers move, without a timed entry animation.
-      _reveal = shrinking
-          ? math.min(
-              _reveal,
-              ((width - _fitWidth) / _sourcePage.width * 2).clamp(0, 1),
+      _reveal = math.max(
+        _reveal,
+        math
+            .max(
+              (details.scale - 1).abs() * 2,
+              (focalPoint - _focalPoint).distance / 160,
             )
-          : math.max(
-              _reveal,
-              math
-                  .max(
-                    (details.scale - 1).abs() * 2,
-                    (focalPoint - _focalPoint).distance / 160,
-                  )
-                  .clamp(0, 1),
-            );
+            .clamp(0, 1),
+      );
     });
+  }
+
+  void _finishReveal() {
+    if (_visible && !_returning) _unclip.forward(from: _reveal);
   }
 
   Future<void> _reset() async {
     if (!_visible || _returning) return;
+    _unclip.stop();
     setState(() => _returning = true);
     await _return.forward(from: 0).orCancel.catchError((Object _) {});
     if (!mounted) return;
@@ -187,11 +203,25 @@ class _InboxDocumentZoomState extends State<InboxDocumentZoom>
   void dispose() {
     _stream?.removeListener(_imageListener);
     _return.dispose();
+    _unclip.dispose();
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) => PopScope(
+  Widget build(BuildContext context) => widget.fitToImageHeight
+      ? LayoutBuilder(
+          builder: (context, constraints) => SizedBox(
+            width: constraints.maxWidth,
+            height: math.min(
+              constraints.maxHeight,
+              constraints.maxWidth / (_imageSize?.aspectRatio ?? 210 / 297),
+            ),
+            child: _buildPreview(context),
+          ),
+        )
+      : _buildPreview(context);
+
+  Widget _buildPreview(BuildContext context) => PopScope(
     canPop: !_visible,
     onPopInvokedWithResult: (didPop, _) {
       if (!didPop) _reset();
@@ -225,6 +255,7 @@ class _InboxDocumentZoomState extends State<InboxDocumentZoom>
               onTap: _reset,
               onScaleStart: _start,
               onScaleUpdate: _update,
+              onScaleEnd: (_) => _finishReveal(),
               child: Stack(
                 children: [
                   Positioned.fill(
@@ -276,7 +307,8 @@ class _InboxDocumentZoomState extends State<InboxDocumentZoom>
                   _PinchRecognizer.new,
                   (recognizer) => recognizer
                     ..onStart = _start
-                    ..onUpdate = _update,
+                    ..onUpdate = _update
+                    ..onEnd = (_) => _finishReveal(),
                 ),
         },
         child: Opacity(
