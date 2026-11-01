@@ -70,6 +70,29 @@ void main() {
     await tester.pump(const Duration(milliseconds: 240));
     await tester.pumpAndSettle();
     expect(scroll.position.maxScrollExtent, lessThan(keyboardExtent - 200));
+    final arrow = find
+        .descendant(of: typeField, matching: find.byType(IconButton))
+        .hitTestable();
+    if (tester
+        .widget<DropdownMenu<DocumentType?>>(typeField)
+        .menuController!
+        .isOpen) {
+      await tester.tap(arrow);
+      await tester.pumpAndSettle();
+    }
+    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+    await tester.pumpAndSettle();
+    for (var i = 0; i < 5; i++) {
+      await tester.tap(arrow);
+      await tester.pump(const Duration(milliseconds: 40));
+      await tester.pump(const Duration(milliseconds: 40));
+      await tester.pumpAndSettle();
+      expect(find.text('Type 5').last.hitTestable(), findsOneWidget);
+      expect(tester.testTextInput.isVisible, isTrue);
+      await tester.tap(arrow);
+      await tester.pumpAndSettle();
+      expect(find.text('Type 5').hitTestable(), findsNothing);
+    }
     expect(tester.takeException(), isNull);
   });
 

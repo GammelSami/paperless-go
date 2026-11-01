@@ -148,6 +148,7 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
           _keepVisible(
             MetadataDropdown<StoragePath>(
               menuController: _categoryMenu,
+              beforeOpen: _prepareMenu,
               label: 'Kategorie',
               value: storagePaths[_storagePathId],
               items: storagePaths.values.toList(),
@@ -160,6 +161,7 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
           _keepVisible(
             MetadataDropdown<Correspondent>(
               menuController: _correspondentMenu,
+              beforeOpen: _prepareMenu,
               label: 'Absender',
               value: correspondents[_correspondentId],
               items: correspondents.values.toList(),
@@ -184,6 +186,7 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
                 child: _keepVisible(
                   MetadataDropdown<DocumentType>(
                     menuController: _typeMenu,
+                    beforeOpen: _prepareMenu,
                     label: 'Typ',
                     value: docTypes[_documentTypeId],
                     items: docTypes.values.toList(),
@@ -228,6 +231,7 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
                 child: _keepVisible(
                   MetadataDropdown<Tag>(
                     menuController: _tagMenu,
+                    beforeOpen: _prepareMenu,
                     key: ValueKey(_tags.length),
                     label: '+ Tag',
                     value: null,
@@ -311,25 +315,31 @@ class _InboxEditPageState extends ConsumerState<InboxEditPage> {
             return;
           }
           if (ignoreLeadingTap && start.$1.dx < 40) return;
-          if (start.$2) return;
-          WidgetsBinding.instance.addPostFrameCallback((_) async {
+          if (start.$2 || start.$1.dx >= fieldContext.size!.width - 56) return;
+          () async {
+            await WidgetsBinding.instance.endOfFrame;
             if (!fieldContext.mounted) return;
             menuController.close();
-            await _waitForKeyboard();
-            if (!fieldContext.mounted) return;
-            await Scrollable.ensureVisible(
-              fieldContext,
-              alignment: 0,
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOutCubic,
-            );
+            await _prepareMenu(fieldContext);
             if (fieldContext.mounted) menuController.open();
-          });
+          }();
         },
         child: child,
       );
     },
   );
+
+  Future<void> _prepareMenu(BuildContext fieldContext) async {
+    await _waitForKeyboard();
+    if (!fieldContext.mounted) return;
+    await Scrollable.ensureVisible(
+      fieldContext,
+      alignment: 0,
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOutCubic,
+    );
+    await WidgetsBinding.instance.endOfFrame;
+  }
 
   Future<void> _waitForKeyboard() async {
     var last = MediaQuery.viewInsetsOf(context).bottom;

@@ -30,6 +30,7 @@ class MetadataDropdown<T> extends StatefulWidget {
   /// null entry).
   final ValueChanged<String>? onCreate;
   final MenuController? menuController;
+  final Future<void> Function(BuildContext)? beforeOpen;
 
   const MetadataDropdown({
     super.key,
@@ -43,6 +44,7 @@ class MetadataDropdown<T> extends StatefulWidget {
     this.emptyLabel = 'Keine Angabe',
     this.onCreate,
     this.menuController,
+    this.beforeOpen,
   }) : assert(onCreate == null || emptyLabel == '');
 
   @override
@@ -52,6 +54,7 @@ class MetadataDropdown<T> extends StatefulWidget {
 class _MetadataDropdownState<T> extends State<MetadataDropdown<T>> {
   final _controller = TextEditingController();
   final _focus = FocusNode();
+  bool _opening = false;
 
   @override
   void initState() {
@@ -138,9 +141,36 @@ class _MetadataDropdownState<T> extends State<MetadataDropdown<T>> {
         controller: _controller,
         focusNode: _focus,
         initialSelection: effectiveValue,
-        label: Text(label),
+        label: w.beforeOpen == null ? Text(label) : null,
+        decorationBuilder: w.beforeOpen == null
+            ? null
+            : (context, menu) => InputDecoration(
+                label: Text(label),
+                hintText: w.onCreate != null && items.isEmpty
+                    ? 'Namen tippen zum Neuanlegen'
+                    : null,
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    menu.isOpen ? Icons.arrow_drop_up : Icons.arrow_drop_down,
+                  ),
+                  onPressed: onChanged == null || _opening
+                      ? null
+                      : () async {
+                          if (menu.isOpen) {
+                            menu.close();
+                            return;
+                          }
+                          setState(() => _opening = true);
+                          _focus.requestFocus();
+                          await w.beforeOpen!(context);
+                          if (!mounted) return;
+                          if (_focus.hasFocus) menu.open();
+                          setState(() => _opening = false);
+                        },
+                ),
+              ),
         // Nothing left to pick: say how to make a new one.
-        hintText: w.onCreate != null && items.isEmpty
+        hintText: w.beforeOpen == null && w.onCreate != null && items.isEmpty
             ? 'Namen tippen zum Neuanlegen'
             : null,
         enabled: onChanged != null,
